@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>What Should I Play?</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0c; --bg2: #14141a; --bg3: #1c1c24; --bg4: #24242e;
+    --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+    --text: #e8e8f0; --text2: #9898b0; --text3: #555568;
+    --accent: #6b8ff0; --accent2: #4a6ed4;
+    --green: #3ecf74; --green-bg: rgba(62,207,116,0.12);
+    --amber: #f0a030; --amber-bg: rgba(240,160,48,0.12);
+    --red: #e05555;
+    --r: 8px; --rl: 14px;
+    --font: -apple-system,'Segoe UI',system-ui,sans-serif;
+    --mono: 'Cascadia Code','Fira Code',Consolas,monospace;
+  }
+  html, body { height: 100%; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  input, select { font-family: var(--font); }
+
+  /* ── Pool toggle ── */
+  .pool-toggle { display: flex; background: var(--bg3); border-radius: var(--r); padding: 3px; gap: 2px; }
+  .pool-btn { background: transparent; border: none; color: var(--text3); font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: var(--font); transition: background .12s, color .12s; white-space: nowrap; }
+  .pool-btn:hover { color: var(--text2); }
+  .pool-btn.active { background: var(--bg4); color: var(--text); font-weight: 500; }
+
+  /* ── Setup screen ── */
+  .setup-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem; }
+  .setup-card { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--rl); padding: 2.5rem; width: 100%; max-width: 480px; }
+  .setup-card h1 { font-size: 22px; font-weight: 500; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+  .setup-card .sub { font-size: 13px; color: var(--text2); margin-bottom: 2rem; }
+  .field { margin-bottom: 1rem; }
+  .field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text3); margin-bottom: 5px; font-weight: 500; }
+  .field input { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r); padding: 9px 12px; font-size: 13px; color: var(--text); font-family: var(--mono); outline: none; transition: border-color .15s; }
+  .field input:focus { border-color: var(--accent2); }
+  .field input::placeholder { color: var(--text3); }
+  .field .hint { font-size: 11px; color: var(--text3); margin-top: 4px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: var(--r); font-size: 13px; font-weight: 500; cursor: pointer; border: none; font-family: var(--font); transition: opacity .15s, background .15s; }
+  .btn-primary { background: var(--accent); color: #fff; width: 100%; justify-content: center; margin-top: .5rem; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border2); color: var(--text2); }
+  .btn-ghost:hover { background: var(--bg3); color: var(--text); }
+  .error { background: rgba(224,85,85,.1); border: 1px solid rgba(224,85,85,.25); border-radius: var(--r); padding: 10px 14px; font-size: 12px; color: var(--red); margin-top: 1rem; display: none; }
+
+  /* ── Main app ── */
+  .app { display: none; min-height: 100vh; flex-direction: column; }
+  .app.visible { display: flex; }
+
+  /* Top bar */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: rgba(10,10,12,.92); backdrop-filter: blur(12px); z-index: 100; }
+  .topbar-brand { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; color: var(--text); }
+  .topbar-stats { display: flex; gap: 16px; }
+  .tstat { font-size: 12px; color: var(--text3); }
+  .tstat strong { color: var(--text2); font-weight: 500; }
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+  .icon-btn { background: transparent; border: 1px solid var(--border); border-radius: var(--r); padding: 6px 10px; color: var(--text2); cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 5px; transition: background .12s, color .12s; }
+  .icon-btn:hover { background: var(--bg3); color: var(--text); }
+
+  /* ── Hero ── */
+  .hero { position: relative; min-height: 70vh; display: flex; align-items: flex-end; overflow: hidden; }
+  .hero-bg { position: absolute; inset: 0; background-size: cover; background-position: center top; transition: opacity .6s; }
+  .hero-bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(10,10,12,.2) 0%, rgba(10,10,12,.7) 50%, rgba(10,10,12,.98) 100%); }
+  .hero-content { position: relative; z-index: 2; padding: 3rem 3rem 2.5rem; width: 100%; }
+  .hero-genres { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .genre-pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border2); color: var(--text2); background: rgba(255,255,255,.05); }
+  .hero-title { font-size: clamp(28px, 5vw, 52px); font-weight: 600; line-height: 1.1; margin-bottom: 12px; letter-spacing: -.02em; }
+  .hero-meta { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+  .meta-score { display: flex; align-items: center; gap: 6px; }
+  .score-badge { font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 6px; }
+  .score-great { background: rgba(62,207,116,.2); color: var(--green); border: 1px solid rgba(62,207,116,.3); }
+  .score-ok    { background: rgba(240,160,48,.2); color: var(--amber); border: 1px solid rgba(240,160,48,.3); }
+  .score-bad   { background: rgba(224,85,85,.2);  color: var(--red);   border: 1px solid rgba(224,85,85,.3); }
+  .score-none  { background: var(--bg3); color: var(--text3); border: 1px solid var(--border); }
+  .meta-dot { color: var(--text3); }
+  .meta-txt { font-size: 13px; color: var(--text2); }
+  .hero-desc { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 620px; margin-bottom: 24px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; width: 100%; justify-content: space-between; }
+  .btn-play { background: var(--accent); color: #fff; padding: 11px 24px; border-radius: var(--r); font-size: 14px; font-weight: 500; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-family: var(--font); transition: background .15s; }
+  .btn-play:hover { background: var(--accent2); }
+  .btn-trailer { background: rgba(255,255,255,.08); color: var(--text); padding: 11px 20px; border-radius: var(--r); font-size: 14px; border: 1px solid var(--border2); cursor: pointer; display: flex; align-items: center; gap: 8px; font-family: var(--font); transition: background .15s; }
+  .btn-trailer:hover { background: rgba(255,255,255,.14); }
+  .btn-trailer.hidden { display: none; }
+  .btn-links { background: transparent; color: var(--text2); padding: 11px 16px; border-radius: var(--r); font-size: 14px; border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; gap: 6px; font-family: var(--font); transition: background .15s, color .15s; }
+  .btn-links:hover { background: var(--bg3); color: var(--text); }
+
+  /* ── Hero video ── */
+  .hero-unmute { position: absolute; top: 1.25rem; right: 1.25rem; z-index: 10; background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.15); border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; color: #fff; cursor: pointer; font-size: 16px; backdrop-filter: blur(4px); transition: background .15s; }
+  .hero-unmute:hover { background: rgba(0,0,0,.75); }
+
+  /* ── Hero nav arrows ── */
+  .hero-nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 10; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.15); color: #fff; cursor: pointer; font-size: 20px; transition: background .15s; backdrop-filter: blur(4px); }
+  .hero-nav:hover { background: rgba(0,0,0,.75); }
+  .hero-nav.hidden { display: none; }
+  .hero-nav-left  { left: 1.5rem; }
+  .hero-nav-right { right: 1.5rem; }
+  .hero-dots { position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 10; }
+  .hero-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.3); cursor: pointer; transition: background .15s; }
+  .hero-dot.active { background: #fff; }
+
+  /* ── Candidates row ── */
+  .candidates-section { padding: 0 3rem 2rem; }
+  .candidates-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .candidates-header h2 { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; }
+  .candidates-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .candidate { border-radius: var(--r); overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: border-color .15s, transform .12s; position: relative; }
+  .candidate:hover { transform: translateY(-2px); border-color: var(--border2); }
+  .candidate.active { border-color: var(--accent); }
+  .candidate:focus { outline: none; }
+  .candidate-thumb { width: 100%; aspect-ratio: 460/215; object-fit: cover; display: block; background: var(--bg3); }
+  .candidate-name { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px 8px 7px; background: linear-gradient(transparent, rgba(0,0,0,.85)); font-size: 11px; font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .candidate-loading { position: absolute; inset: 0; background: var(--bg3); display: flex; align-items: center; justify-content: center; }
+  .spin { animation: spin 1s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+
+
+  /* ── Bell modal ── */
+  .bell-modal { position: fixed; top: 52px; right: 3.5rem; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--rl); padding: 1.25rem; width: 340px; z-index: 500; box-shadow: 0 8px 32px rgba(0,0,0,.6); opacity: 0; pointer-events: none; transition: opacity .15s; max-height: 70vh; overflow-y: auto; }
+  .bell-modal.open { opacity: 1; pointer-events: all; }
+  .bell-modal h4 { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+  .snooze-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .snooze-item:last-child { border-bottom: none; }
+  .snooze-thumb { width: 60px; height: 28px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: var(--bg3); }
+  .snooze-info { flex: 1; min-width: 0; }
+  .snooze-name { font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .snooze-date { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .snooze-due { color: var(--accent2); }
+  .snooze-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .snooze-btn { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r); padding: 3px 7px; font-size: 11px; color: var(--text2); cursor: pointer; font-family: var(--font); }
+  .bell-empty { font-size: 13px; color: var(--text3); text-align: center; padding: 1rem 0; }
+
+  /* ── Remind modal ── */
+  .remind-modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 500; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .remind-modal.open { opacity: 1; pointer-events: all; }
+  .remind-modal-inner { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--rl); padding: 1.5rem; width: 100%; max-width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,.5); }
+  .remind-modal h4 { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 14px; }
+  .remind-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .remind-opt { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--r); padding: 12px; font-size: 13px; color: var(--text); cursor: pointer; font-family: var(--font); text-align: center; transition: background .12s; }
+  .remind-opt:hover { background: var(--bg4); }
+  .btn-remind-close { background: transparent; border: none; color: var(--text3); cursor: pointer; font-size: 12px; margin-top: 12px; display: block; font-family: var(--font); width: 100%; text-align: center; }
+
+  /* ── Settings modal ── */
+  .settings-modal { position: fixed; top: 52px; right: 1rem; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--rl); padding: 1.25rem; width: 320px; z-index: 500; box-shadow: 0 8px 32px rgba(0,0,0,.6); opacity: 0; pointer-events: none; transition: opacity .15s; }
+  .settings-modal.open { opacity: 1; pointer-events: all; }
+  .settings-modal h4 { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+  .settings-section { margin-bottom: 1rem; }
+  .settings-section h5 { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .cache-btn { width: 100%; text-align: left; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r); padding: 9px 12px; font-size: 13px; color: var(--text); cursor: pointer; font-family: var(--font); margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; transition: background .12s; }
+  .cache-btn:hover { background: var(--bg4); }
+  .cache-btn-desc { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .cache-btn-label { display: flex; flex-direction: column; }
+  .cache-status { font-size: 11px; color: var(--green); margin-top: 8px; display: none; }
+
+  /* ── Add trailer modal ── */
+  .trailer-modal { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--rl); padding: 1rem 1.25rem; width: 100%; max-width: 480px; z-index: 500; box-shadow: 0 8px 32px rgba(0,0,0,.5); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .trailer-modal.open { opacity: 1; pointer-events: all; }
+  .trailer-modal h4 { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+  .trailer-modal p { font-size: 12px; color: var(--text3); margin-bottom: 10px; }
+  .btn-trailer-close { background: transparent; border: none; color: var(--text3); cursor: pointer; font-size: 12px; margin-top: 8px; display: block; font-family: var(--font); }
+
+  /* ── Override modal ── */
+  .override-modal { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--rl); padding: 1rem 1.25rem; width: 100%; max-width: 480px; z-index: 500; box-shadow: 0 8px 32px rgba(0,0,0,.5); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .override-modal.open { opacity: 1; pointer-events: all; }
+  .override-modal h4 { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+  .override-modal p { font-size: 12px; color: var(--text3); margin-bottom: 10px; }
+  .override-row { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; background: var(--bg3); }
+  .override-row:focus-within { border-color: var(--accent2); }
+  .override-input { flex: 1; background: transparent; border: none; padding: 10px 12px; font-size: 13px; color: var(--text); outline: none; font-family: var(--font-mono); min-width: 0; }
+  .btn-override-close { background: transparent; border: none; color: var(--text3); cursor: pointer; font-size: 12px; margin-top: 8px; display: block; font-family: var(--font); }
+
+  /* ── Search modal ── */
+  .search-input-wrap { display: flex; align-items: stretch; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; background: var(--bg3); }
+  .search-input-wrap:focus-within { border-color: var(--accent2); }
+  .search-input { flex: 1; background: transparent; border: none; padding: 10px 12px; font-size: 14px; color: var(--text); outline: none; font-family: var(--font); min-width: 0; }
+  .search-input::placeholder { color: var(--text3); }
+  .search-results { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+  .search-result { display: flex; gap: 12px; align-items: center; padding: 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r); cursor: pointer; transition: border-color .12s; }
+  .search-result:hover { border-color: var(--border2); }
+  .search-result-thumb { width: 80px; height: 37px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: var(--bg4); }
+  .search-result-info { flex: 1; min-width: 0; }
+  .search-result-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .search-result-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .search-empty { font-size: 13px; color: var(--text3); text-align: center; padding: 1.5rem 0; }
+
+  /* ── Summary modal ── */
+  .summary-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 2rem; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .summary-overlay.open { opacity: 1; pointer-events: all; }
+  .summary-inner { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--rl); padding: 1.5rem; width: 100%; max-width: 560px; }
+  .summary-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .summary-header h3 { font-size: 15px; font-weight: 500; color: var(--text); }
+  .summary-close { background: transparent; border: none; color: var(--text2); font-size: 20px; cursor: pointer; padding: 2px 6px; line-height: 1; }
+  .summary-close:hover { color: var(--text); }
+  .summary-body { font-size: 14px; color: var(--text2); line-height: 1.7; }
+  .summary-loading { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text3); }
+  .summary-cached { font-size: 11px; color: var(--text3); margin-top: 10px; }
+
+  /* ── Loading / empty states ── */
+  .hero-skeleton { min-height: 70vh; display: flex; align-items: center; justify-content: center; }
+  .loading-center { text-align: center; color: var(--text3); }
+  .loading-center p { font-size: 14px; margin-top: 12px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- Setup screen -->
+<div class="setup-screen" id="setup-screen">
+  <div class="setup-card">
+    <h1><i class="ti ti-device-gamepad-2" aria-hidden="true"></i> What Should I Play?</h1>
+    <p class="sub">Enter your details to load your Steam backlog.</p>
+    <div class="field">
+      <label>Steam ID (64-bit)</label>
+      <input type="text" id="steamid" placeholder="76561198XXXXXXXXX" />
+      <div class="hint">Find yours at <a href="https://steamidfinder.com" target="_blank">steamidfinder.com</a></div>
+    </div>
+    <div class="field">
+      <label>Proxy URL</label>
+      <input type="text" id="proxyurl" value="http://localhost:3000" />
+    </div>
+    <button class="btn btn-primary" id="setup-btn" onclick="startApp()">
+      <i class="ti ti-player-play" aria-hidden="true"></i> Load My Library
+    </button>
+    <div class="error" id="setup-error"></div>
+  </div>
+</div>
+
+<!-- Main app -->
+<div class="app" id="app">
+
+  <div class="topbar">
+    <div class="topbar-brand"><i class="ti ti-device-gamepad-2" aria-hidden="true" style="font-size:18px"></i> What Should I Play?</div>
+    <div class="topbar-stats">
+      <span class="tstat"><strong id="stat-total">—</strong> games</span>
+      <span class="tstat"><strong id="stat-unplayed">—</strong> unplayed</span>
+    </div>
+    <div class="topbar-actions">
+      <div class="pool-toggle">
+        <button class="pool-btn active" id="pool-unplayed" onclick="setPool('unplayed')">Unplayed</button>
+        <button class="pool-btn" id="pool-under2h" onclick="setPool('under2h')">Under 2h</button>
+        <button class="pool-btn" id="pool-all" onclick="setPool('all')">All</button>
+
+      </div>
+      <button class="icon-btn" id="btn-bell" onclick="openBell()" style="position:relative">
+        <i class="ti ti-bell" aria-hidden="true"></i>
+        <span id="bell-badge" style="position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;display:none;align-items:center;justify-content:center;font-weight:600"></span>
+      </button>
+      <button class="icon-btn" onclick="openSearch()"><i class="ti ti-search" aria-hidden="true"></i> Search</button>
+      <button class="icon-btn" onclick="reroll()"><i class="ti ti-refresh" aria-hidden="true"></i> Reroll</button>
+      <button class="icon-btn" onclick="openSettings()"><i class="ti ti-settings" aria-hidden="true"></i></button>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <div id="hero-area">
+    <div class="hero-skeleton" id="hero-loading">
+      <div class="loading-center">
+        <i class="ti ti-loader spin" style="font-size:32px;color:var(--text3)"></i>
+        <p id="loading-msg">Loading your library…</p>
+      </div>
+    </div>
+    <div class="hero hidden" id="hero">
+      <div class="hero-bg" id="hero-bg"></div>
+      <video id="hero-video" autoplay muted loop playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .6s;pointer-events:none"></video>
+      <div id="hero-video-overlay" style="position:absolute;inset:0;background:linear-gradient(to bottom, rgba(10,10,12,.2) 0%, rgba(10,10,12,.7) 50%, rgba(10,10,12,.98) 100%);opacity:0;transition:opacity .6s;pointer-events:none;z-index:1"></div>
+      <button class="hero-unmute hidden" id="hero-unmute" onclick="toggleMute()"><i class="ti ti-volume-off" id="unmute-icon" aria-hidden="true"></i></button>
+      <button class="hero-nav hero-nav-left hidden" id="hero-prev" onclick="heroNav(-1)"><i class="ti ti-chevron-left" aria-hidden="true"></i></button>
+      <button class="hero-nav hero-nav-right hidden" id="hero-next" onclick="heroNav(1)"><i class="ti ti-chevron-right" aria-hidden="true"></i></button>
+      <div class="hero-dots hidden" id="hero-dots"></div>
+      <div class="hero-content">
+        <div class="hero-genres" id="hero-genres"></div>
+        <div class="hero-title" id="hero-title"></div>
+        <div class="hero-meta" id="hero-meta"></div>
+        <div class="hero-desc" id="hero-desc"></div>
+        <div class="hero-actions">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn-play" onclick="launchGame()"><i class="ti ti-player-play" aria-hidden="true"></i> Play Now</button>
+            <a id="btn-youtube" href="#" target="_blank" class="btn-trailer"><i class="ti ti-brand-youtube" aria-hidden="true"></i> Gameplay</a>
+            <button class="btn-trailer hidden" id="btn-trailer" onclick="heroNav(0)" style="display:none"><i class="ti ti-player-play"></i> Watch Trailer</button>
+            <button class="btn-trailer hidden" id="btn-add-trailer" onclick="openAddTrailer()" style="background:transparent;border:1px solid var(--border2);color:var(--text2)"><i class="ti ti-circle-plus" aria-hidden="true"></i> Add Trailer</button>
+            <a id="btn-rawg" href="#" target="_blank" class="btn-links"><i class="ti ti-external-link" aria-hidden="true"></i> RAWG</a>
+            <a id="btn-store" href="#" target="_blank" class="btn-links"><i class="ti ti-brand-steam" aria-hidden="true" style="font-size:16px"></i> Store</a>
+            <button id="btn-remind" onclick="openRemind()" class="btn-links" style="border-color:rgba(255,255,255,0.06);color:var(--text3);font-size:12px"><i class="ti ti-bell" aria-hidden="true" style="font-size:13px"></i> Snooze</button>
+          <button onclick="steamOverride()" class="btn-links" style="border-color:rgba(255,255,255,0.06);color:var(--text3);font-size:12px"><i class="ti ti-alert-triangle" aria-hidden="true" style="font-size:13px"></i> Wrong game?</button>
+          </div>
+          <div class="hero-reviews hidden" id="reviews-section">
+          <span class="reviews-label">Steam reviews</span>
+          <span class="review-score-label hidden" id="review-score-label"></span>
+          <span class="review-score-count hidden" id="review-score-count"></span>
+          <button id="reviews-link" class="reviews-link hidden" onclick="openReviewsModal()" style="background:transparent;border:none;cursor:pointer;padding:0;font-family:var(--font);color:var(--accent);font-size:12px;display:inline-flex;align-items:center;gap:4px">
+            <i class="ti ti-messages" aria-hidden="true"></i> Reviews
+          </button>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Candidates -->
+  <div class="candidates-section">
+    <div class="candidates-header">
+      <h2>Pick one to explore</h2>
+      <button class="icon-btn" onclick="reroll()"><i class="ti ti-refresh" aria-hidden="true"></i> New selection</button>
+    </div>
+    <div class="candidates-row" id="candidates-row"></div>
+  </div>
+
+</div>
+
+
+
+<!-- Bell modal -->
+<div class="bell-modal" id="bell-modal">
+  <h4><i class="ti ti-bell" style="font-size:13px;vertical-align:-1px;margin-right:5px"></i> Reminders</h4>
+  <div id="bell-content"><div class="bell-empty">No reminders set</div></div>
+</div>
+
+<!-- Remind me modal -->
+<div class="remind-modal" id="remind-modal" onclick="if(event.target===this)closeRemind()">
+  <div class="remind-modal-inner">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h4 id="remind-title" style="margin:0">Snooze this game for…</h4>
+      <button onclick="closeRemind()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:20px;line-height:1;padding:0;display:flex;align-items:center">&times;</button>
+    </div>
+    <div class="remind-options">
+      <button class="remind-opt" onclick="snoozeGame(7)">7 days</button>
+      <button class="remind-opt" onclick="snoozeGame(14)">14 days</button>
+      <button class="remind-opt" onclick="snoozeGame(30)">30 days</button>
+      <button class="remind-opt" onclick="snoozeGame(90)">90 days</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="settings-modal" id="settings-modal">
+  <h4><i class="ti ti-settings" style="font-size:13px;vertical-align:-1px;margin-right:5px"></i>Settings</h4>
+
+  <div class="settings-section">
+    <h5>Cache</h5>
+    <button class="cache-btn" onclick="clearCache('rawg')">
+      <div class="cache-btn-label"><span>Clear game metadata</span><span class="cache-btn-desc">Re-fetches descriptions, art, screenshots from RAWG</span></div>
+      <i class="ti ti-trash" style="font-size:15px;color:var(--text3);flex-shrink:0"></i>
+    </button>
+    <button class="cache-btn" onclick="clearCache('reviews')">
+      <div class="cache-btn-label"><span>Clear reviews cache</span><span class="cache-btn-desc">Re-fetches Steam review scores</span></div>
+      <i class="ti ti-trash" style="font-size:15px;color:var(--text3);flex-shrink:0"></i>
+    </button>
+    <button class="cache-btn" onclick="clearCache('library')">
+      <div class="cache-btn-label"><span>Clear library cache</span><span class="cache-btn-desc">Re-fetches your Steam game list</span></div>
+      <i class="ti ti-trash" style="font-size:15px;color:var(--text3);flex-shrink:0"></i>
+    </button>
+    <button class="cache-btn" onclick="clearCache('all')" style="border-color:rgba(224,85,85,.3)">
+      <div class="cache-btn-label"><span>Clear all caches</span><span class="cache-btn-desc">Keeps AI summaries, trailers & game overrides</span></div>
+      <i class="ti ti-trash" style="font-size:15px;color:var(--red);flex-shrink:0"></i>
+    </button>
+    <div class="cache-status" id="cache-status"><i class="ti ti-check" style="font-size:12px"></i> Done</div>
+  </div>
+
+  <div class="settings-section" style="margin-bottom:0;padding-top:.75rem;border-top:1px solid var(--border)">
+    <button class="cache-btn" onclick="resetApp();closeSettings()">
+      <div class="cache-btn-label"><span>Switch account</span><span class="cache-btn-desc">Return to setup screen</span></div>
+      <i class="ti ti-logout" style="font-size:15px;color:var(--text3);flex-shrink:0"></i>
+    </button>
+  </div>
+</div>
+
+<!-- Add Trailer modal -->
+<div class="trailer-modal" id="add-trailer-modal">
+  <h4><i class="ti ti-brand-youtube" style="font-size:14px;vertical-align:-2px;margin-right:5px;color:#ff4444"></i> Add YouTube Trailer</h4>
+  <p>Paste a YouTube URL for this game's trailer. It will be saved and play automatically next time.</p>
+  <div class="override-row">
+    <input class="override-input" id="trailer-url-input" placeholder="https://www.youtube.com/watch?v=..." onkeydown="if(event.key==='Enter')applyTrailer()" />
+    <button onclick="applyTrailer()" style="padding:8px 16px;flex-shrink:0;width:auto;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-weight:500;display:flex;align-items:center;gap:5px;font-family:var(--font);"><i class="ti ti-check"></i> Save</button>
+  </div>
+  <button class="btn-trailer-close" onclick="closeAddTrailer()">Cancel</button>
+</div>
+
+<!-- Override modal -->
+<div class="override-modal" id="override-modal">
+  <h4><i class="ti ti-pencil" style="font-size:14px;vertical-align:-2px;margin-right:5px"></i>Override RAWG match</h4>
+  <p>Paste the RAWG slug or URL for the correct game.<br>e.g. <code style="font-size:11px">hades-2018</code> or <code style="font-size:11px">https://rawg.io/games/hades-2018</code></p>
+  <div class="override-row">
+    <input class="override-input" id="override-input" placeholder="hades-2018" onkeydown="if(event.key==='Enter')applyOverride()" />
+    <button onclick="applyOverride()" style="padding:8px 16px;flex-shrink:0;width:auto;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-weight:500;display:flex;align-items:center;gap:5px;font-family:var(--font);"><i class="ti ti-check"></i> Apply</button>
+  </div>
+  <button class="btn-override-close" onclick="closeOverride()">Cancel</button>
+</div>
+
+<!-- Search modal -->
+<div class="summary-overlay" id="search-modal" onclick="closeSearch(event)">
+  <div class="summary-inner" style="max-width:620px" onclick="event.stopPropagation()">
+    <div class="summary-header">
+      <h3>Search any Steam game</h3>
+      <button class="summary-close" onclick="closeSearch()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="search-input-wrap">
+      <input class="search-input" id="search-input" type="text" placeholder="Type a game name…" oninput="onSearchInput()" onkeydown="if(event.key==='Enter')doSearch()" />
+      <button onclick="doSearch()" style="padding:8px 14px;flex-shrink:0;width:auto;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:15px;display:flex;align-items:center;"><i class="ti ti-search"></i></button>
+    </div>
+    <div id="search-results-area"></div>
+  </div>
+</div>
+
+<!-- Reviews modal -->
+<div class="summary-overlay" id="reviews-modal" onclick="closeReviewsModal(event)">
+  <div class="summary-inner" onclick="event.stopPropagation()">
+    <div class="summary-header">
+      <h3 id="reviews-modal-title">Reviews</h3>
+      <button class="summary-close" onclick="closeReviewsModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="reviews-choice">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:1.25rem">What would you like to do?</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button onclick="goToSteamReviews()" class="btn btn-ghost" style="justify-content:flex-start;gap:10px;padding:14px 16px;font-size:14px">
+          <i class="ti ti-brand-steam" style="font-size:18px"></i>
+          <div style="text-align:left"><div style="font-weight:500">Read on Steam</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Opens Steam store review page</div></div>
+        </button>
+        <button onclick="doSummarize()" class="btn btn-ghost" style="justify-content:flex-start;gap:10px;padding:14px 16px;font-size:14px">
+          <i class="ti ti-sparkles" style="font-size:18px;color:var(--accent)"></i>
+          <div style="text-align:left"><div style="font-weight:500">Summarize with AI</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Claude reads 25 recent reviews and summarizes</div></div>
+        </button>
+        <button onclick="doHltb()" class="btn btn-ghost" style="justify-content:flex-start;gap:10px;padding:14px 16px;font-size:14px">
+          <i class="ti ti-clock" style="font-size:18px;color:var(--accent)"></i>
+          <div style="text-align:left"><div style="font-weight:500">How long to beat?</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Looks up HowLongToBeat data, falls back to AI</div></div>
+        </button>
+      </div>
+    </div>
+    <div id="reviews-summary-view" class="hidden">
+      <button onclick="reviewsGoBack()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-family:var(--font);font-size:13px;display:flex;align-items:center;gap:5px;padding:0;margin-bottom:12px"><i class="ti ti-arrow-left" style="font-size:15px"></i> Back</button>
+      <div class="summary-body" id="summary-body"></div>
+    </div>
+    <div id="reviews-playtime-view" class="hidden">
+      <button onclick="reviewsGoBack()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-family:var(--font);font-size:13px;display:flex;align-items:center;gap:5px;padding:0;margin-bottom:12px"><i class="ti ti-arrow-left" style="font-size:15px"></i> Back</button>
+      <div class="summary-body" id="playtime-body"></div>
+    </div>
+    <div id="reviews-hltb-view" class="hidden">
+      <button onclick="reviewsGoBack()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-family:var(--font);font-size:13px;display:flex;align-items:center;gap:5px;padding:0;margin-bottom:12px"><i class="ti ti-arrow-left" style="font-size:15px"></i> Back</button>
+      <div class="summary-body" id="hltb-body"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CANDIDATE_COUNT = 5;
+let proxy = window.location.origin;
+let poolMode = 'unplayed';
+let heroImages = [];
+let heroImageIdx = 0;
+let steamId = '';
+let allGames = [];
+let unplayed = [];
+let candidates = [];
+let activeIdx = 0;
+let currentRawg = null;
+
+function proxyBase() { return proxy.replace(/\/$/, ''); }
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  el.style.display = 'block';
+  el.textContent = msg;
+}
+
+async function startApp() {
+  steamId = document.getElementById('steamid').value.trim();
+  proxy   = window.location.origin;
+  if (!steamId) { showError('setup-error', 'Enter your Steam ID.'); return; }
+
+  const btn = document.getElementById('setup-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader spin"></i> Loading…';
+
+  try {
+    const r = await fetch(`${proxyBase()}/api/games?steamid=${encodeURIComponent(steamId)}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Server error');
+    if (!data.response?.games) throw new Error('No games returned. Is your Steam profile public?');
+
+    allGames = data.response.games;
+    unplayed = allGames.filter(g => !g.playtime_forever);
+    loadSnoozed();
+
+    document.getElementById('stat-total').textContent    = allGames.length.toLocaleString();
+    document.getElementById('stat-unplayed').textContent = unplayed.length.toLocaleString();
+
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+
+    await reroll();
+  } catch(e) {
+    showError('setup-error', e.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-player-play"></i> Load My Library';
+  }
+}
+
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function pickCandidates() {
+  let pool;
+  if (poolMode === 'unplayed')      pool = allGames.filter(g => !g.playtime_forever);
+  else if (poolMode === 'under2h')  pool = allGames.filter(g => (g.playtime_forever || 0) < 120);
+  else                              pool = [...allGames];
+  // Exclude snoozed games
+  pool = pool.filter(g => !snoozedAppids.has(String(g.appid)));
+  pool = shuffleArray(pool);
+  return pool.slice(0, CANDIDATE_COUNT);
+}
+
+async function setPool(mode) {
+  poolMode = mode;
+  ['unplayed','under2h','all'].forEach(m => {
+    document.getElementById(`pool-${m}`).classList.toggle('active', m === mode);
+  });
+  reroll();
+}
+
+// In-memory prefetch cache: name/appid -> response data
+const prefetchCache = {};
+
+async function prefetchCandidate(game) {
+  try {
+    const [rawgRes, reviewsRes] = await Promise.all([
+      fetch(`${proxyBase()}/api/rawg?name=${encodeURIComponent(cleanGameName(game.name))}&appid=${game.appid}`),
+      fetch(`${proxyBase()}/api/reviews?appid=${game.appid}`)
+    ]);
+    const [rawg, reviews] = await Promise.all([rawgRes.json(), reviewsRes.json()]);
+    prefetchCache[game.appid] = { rawg, reviews };
+  } catch(e) {}
+}
+
+async function reroll() {
+  candidates = pickCandidates();
+  activeIdx = 0;
+  document.getElementById('reviews-section').classList.add('hidden');
+
+  const v = document.getElementById('hero-video');
+  v.pause(); v.src = ''; v.style.opacity = '0';
+  document.getElementById('hero-unmute').classList.add('hidden');
+  renderCandidates();
+  // Clear old prefetch data and kick off background prefetch for new candidates
+  Object.keys(prefetchCache).forEach(k => delete prefetchCache[k]);
+  candidates.forEach(g => prefetchCandidate(g));
+  await selectCandidate(0);
+}
+
+function renderCandidates() {
+  const row = document.getElementById('candidates-row');
+  row.innerHTML = candidates.map((g, i) => `
+    <div class="candidate ${i === activeIdx ? 'active' : ''}" id="cand-${i}" onclick="selectCandidate(${i})">
+      <img class="candidate-thumb"
+           src="https://cdn.akamai.steamstatic.com/steam/apps/${g.appid}/header.jpg"
+           alt="${esc(g.name)}" onerror="this.style.background='var(--bg4)'">
+      <div class="candidate-name">${esc(cleanGameName(g.name))}</div>
+    </div>`).join('');
+}
+
+function cleanGameName(name) {
+  return name
+    .replace(/\s*\(itch\)/gi, '')
+    .replace(/\s*\(itch\.io\)/gi, '')
+    .replace(/\s*\[itch\]/gi, '')
+    .trim();
+}
+
+async function selectCandidate(idx) {
+  activeIdx = idx;
+  document.querySelectorAll('.candidate').forEach((el, i) =>
+    el.classList.toggle('active', i === idx));
+
+  const game = candidates[idx];
+  showHeroLoading(`Looking up ${game.name}…`);
+
+  try {
+    let rawg, reviews;
+    if (prefetchCache[game.appid]) {
+      ({ rawg, reviews } = prefetchCache[game.appid]);
+    } else {
+      // Not ready yet — fetch all in parallel
+      const [rawgRes, reviewsRes] = await Promise.all([
+        fetch(`${proxyBase()}/api/rawg?name=${encodeURIComponent(cleanGameName(game.name))}&appid=${game.appid}`),
+        fetch(`${proxyBase()}/api/reviews?appid=${game.appid}`)
+      ]);
+      [rawg, reviews] = await Promise.all([rawgRes.json(), reviewsRes.json()]);
+    }
+    if (!rawg || rawg.error) throw new Error(rawg?.error || 'RAWG lookup failed');
+    currentRawg = rawg;
+    currentRawg._appid = game.appid;
+    currentRawg._name  = game.name;
+    renderHero(rawg, game);
+    renderReviews(reviews, game.appid);
+  } catch(e) {
+    renderHeroFallback(game);
+  }
+}
+
+function showHeroLoading(msg) {
+  document.getElementById('hero').classList.add('hidden');
+  document.getElementById('hero-loading').classList.remove('hidden');
+  document.getElementById('loading-msg').textContent = msg;
+}
+
+function renderHero(d, game) {
+  document.getElementById('hero-loading').classList.add('hidden');
+  document.getElementById('hero').classList.remove('hidden');
+
+  const bg = d.background_image ||
+    `https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/library_hero.jpg`;
+  document.getElementById('hero-bg').style.backgroundImage = `url('${bg}')`;
+  buildHeroImages(d, game);
+  document.getElementById('hero-title').textContent = cleanGameName(d.name || game.name);
+
+  // Genres
+  const genres = (d.genres || []).slice(0, 4).map(g =>
+    `<span class="genre-pill">${esc(g.name)}</span>`).join('');
+  document.getElementById('hero-genres').innerHTML = genres;
+
+  // Meta row
+  const score = d.metacritic;
+  let scoreBadge = '';
+  if (score) {
+    const cls = score >= 75 ? 'score-great' : score >= 50 ? 'score-ok' : 'score-bad';
+    scoreBadge = `<span class="meta-score"><span class="score-badge ${cls}">MC ${score}</span></span><span class="meta-dot">·</span>`;
+  }
+  const released = d.released ? new Date(d.released).getFullYear() : '';
+  const playtime = d.playtime ? `~${d.playtime}h avg` : '';
+  const parts = [released, playtime].filter(Boolean).join(' · ');
+  document.getElementById('hero-meta').innerHTML =
+    `${scoreBadge}<span class="meta-txt">${esc(parts)}</span>`;
+
+  // Description
+  const rawDesc = d.description || 'No description available.';
+  const cleanDesc = rawDesc.replace(/<[^>]*>/g, ' ').replace(/#{1,6}\s*/g, '').replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1').replace(/\s+/g, ' ').trim();
+  document.getElementById('hero-desc').textContent = cleanDesc;
+
+  // Links
+  const rawgBtn = document.getElementById('btn-rawg');
+  if (d.rawg_url && d.rawg_url.includes('rawg.io')) {
+    rawgBtn.href = d.rawg_url;
+    rawgBtn.classList.remove('hidden');
+  } else {
+    rawgBtn.href = '#';
+    rawgBtn.classList.add('hidden');
+  }
+  document.getElementById('btn-store').href = `https://store.steampowered.com/app/${game.appid}`;
+  document.getElementById('btn-youtube').href = `https://www.youtube.com/results?search_query=${encodeURIComponent(cleanGameName(d.name || game.name) + ' gameplay')}`;
+
+  // Trailer / Add Trailer button visibility
+  if (d.trailer) {
+    document.getElementById('btn-trailer').classList.remove('hidden');
+    document.getElementById('btn-add-trailer').classList.add('hidden');
+  } else {
+    document.getElementById('btn-trailer').classList.add('hidden');
+    document.getElementById('btn-add-trailer').classList.remove('hidden');
+  }
+}
+
+function renderHeroFallback(game) {
+  document.getElementById('hero-loading').classList.add('hidden');
+  document.getElementById('hero').classList.remove('hidden');
+  document.getElementById('hero-bg').style.backgroundImage =
+    `url('https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/library_hero.jpg')`;
+  document.getElementById('hero-title').textContent = cleanGameName(game.name);
+  document.getElementById('hero-genres').innerHTML  = '';
+  document.getElementById('hero-meta').innerHTML    = '<span class="meta-txt">No metadata found</span>';
+  document.getElementById('hero-desc').textContent  = 'Could not load game details from RAWG.';
+  document.getElementById('btn-trailer').classList.add('hidden');
+  document.getElementById('btn-add-trailer').classList.remove('hidden');
+  document.getElementById('btn-rawg').href  = '#';
+  document.getElementById('btn-store').href = `https://store.steampowered.com/app/${game.appid}`;
+  document.getElementById('btn-youtube').href = `https://www.youtube.com/results?search_query=${encodeURIComponent(cleanGameName(game.name) + ' gameplay')}`;
+  heroImages = []; heroImageIdx = 0;
+  document.getElementById('hero-prev').classList.add('hidden');
+  document.getElementById('hero-next').classList.add('hidden');
+  document.getElementById('hero-dots').classList.add('hidden');
+  currentRawg = null;
+}
+
+function launchGame() {
+  if (!currentRawg) return;
+  window.open(`steam://run/${currentRawg._appid}`, '_blank');
+}
+
+
+
+function resetApp() {
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('setup-screen').style.display = 'flex';
+  allGames = []; unplayed = []; candidates = []; currentRawg = null;
+  const btn = document.getElementById('setup-btn');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="ti ti-player-play"></i> Load My Library';
+}
+
+function renderReviews(data, appid) {
+  const section    = document.getElementById('reviews-section');
+  const scoreLabel = document.getElementById('review-score-label');
+  const scoreCount = document.getElementById('review-score-count');
+  const link       = document.getElementById('reviews-link');
+
+  if (!data || data.error) { section.classList.add('hidden'); return; }
+
+  const total    = data.total_reviews || 0;
+  const positive = data.total_positive || 0;
+  const pct      = total > 0 ? Math.round(positive / total * 100) : 0;
+  const desc     = data.review_score_desc || 'No reviews';
+  const descClass = desc.toLowerCase().includes('positive') ? 'score-great'
+                  : desc.toLowerCase().includes('mixed') ? 'score-mixed' : 'score-bad';
+
+  scoreLabel.textContent = desc;
+  scoreLabel.className = `review-score-label ${descClass}`;
+  scoreCount.textContent = `· ${pct}% of ${total.toLocaleString()}`;
+  link.href = data.reviews_url || `https://store.steampowered.com/app/${appid}/#app_reviews_hash`;
+
+  section.classList.remove('hidden');
+  scoreLabel.classList.remove('hidden');
+  scoreCount.classList.remove('hidden');
+  link.classList.remove('hidden');
+
+}
+
+function buildHeroImages(d, game) {
+  const main = d.background_image ||
+    `https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/library_hero.jpg`;
+  const shots = (d.screenshots || []).slice(0, 8).map(s => s.image || s.url).filter(Boolean);
+  // If trailer exists, first slot is the video, then main bg, then screenshots
+  if (d.trailer) {
+    const trailerType = (d.trailer_type === 'youtube' || d.trailer.includes('youtube.com/embed')) ? 'youtube' : 'video';
+    heroImages = [{ type: trailerType, src: d.trailer }, main, ...shots];
+  } else {
+    heroImages = [main, ...shots];
+  }
+  heroImageIdx = 0;
+  updateHeroNav();
+  updateHeroSlide();
+  // Preload images in background
+  heroImages.filter(i => typeof i === 'string').forEach(url => { const img = new Image(); img.src = url; });
+}
+
+function stopYtIframe() {
+  const iframe = document.getElementById('hero-yt-iframe');
+  if (iframe) { iframe.src = ''; iframe.style.display = 'none'; }
+  document.getElementById('hero-unmute').classList.add('hidden');
+}
+
+function updateHeroSlide() {
+  const current = heroImages[heroImageIdx];
+  const video = document.getElementById('hero-video');
+  const bg    = document.getElementById('hero-bg');
+  const unmute = document.getElementById('hero-unmute');
+
+  const overlay = document.getElementById('hero-video-overlay');
+  if (current && typeof current === 'object' && current.type === 'video') {
+    stopYtIframe();
+    video.src = current.src;
+    video.play().catch(() => {});
+    video.style.opacity = '1';
+    overlay.style.opacity = '1';
+    bg.style.backgroundImage = 'none';
+    unmute.classList.remove('hidden');
+  } else if (current && typeof current === 'object' && current.type === 'youtube') {
+    // YouTube trailer — use iframe
+    video.pause(); video.src = ''; video.style.opacity = '0';
+    overlay.style.opacity = '1';
+    bg.style.backgroundImage = 'none';
+    unmute.classList.add('hidden');
+    // Inject iframe into hero
+    let iframe = document.getElementById('hero-yt-iframe');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'hero-yt-iframe';
+      iframe.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:177.78vh;height:100vh;min-width:100%;min-height:56.25vw;border:none;z-index:0;pointer-events:none';
+      iframe.dataset.muted = '1';
+      iframe.allow = 'autoplay; encrypted-media';
+      document.getElementById('hero').appendChild(iframe);
+    }
+    const ytId = current.src.includes('embed/') ? current.src.split('embed/')[1].split('?')[0] : current.src.split('/').pop();
+    iframe.dataset.ytid = ytId;
+    iframe.dataset.muted = '1';
+    iframe.src = `https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&controls=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&enablejsapi=1`;
+    unmute.classList.remove('hidden');
+    iframe.style.display = 'block';
+  } else {
+    video.pause(); video.src = ''; video.style.opacity = '0';
+    overlay.style.opacity = '0';
+    bg.style.backgroundImage = `url('${current}')`;
+    unmute.classList.add('hidden');
+    stopYtIframe();
+  }
+}
+
+function toggleMute() {
+  const video  = document.getElementById('hero-video');
+  const iframe = document.getElementById('hero-yt-iframe');
+  const icon   = document.getElementById('unmute-icon');
+
+  if (iframe && iframe.style.display !== 'none' && iframe.dataset.ytid) {
+    const muted = iframe.dataset.muted === '1';
+    iframe.dataset.muted = muted ? '0' : '1';
+    const fn = muted ? 'unMute' : 'mute';
+    iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: fn, args: [] }), '*');
+    icon.className = muted ? 'ti ti-volume' : 'ti ti-volume-off';
+  } else {
+    video.muted = !video.muted;
+    icon.className = video.muted ? 'ti ti-volume-off' : 'ti ti-volume';
+  }
+}
+
+function updateHeroNav() {
+  const prev = document.getElementById('hero-prev');
+  const next = document.getElementById('hero-next');
+  const dots = document.getElementById('hero-dots');
+
+  if (heroImages.length <= 1) {
+    prev.classList.add('hidden');
+    next.classList.add('hidden');
+    dots.classList.add('hidden');
+    return;
+  }
+
+  prev.classList.toggle('hidden', heroImageIdx === 0);
+  next.classList.toggle('hidden', heroImageIdx === heroImages.length - 1);
+  dots.classList.remove('hidden');
+  dots.innerHTML = heroImages.map((_, i) =>
+    `<div class="hero-dot ${i === heroImageIdx ? 'active' : ''}" onclick="heroJump(${i})"></div>`
+  ).join('');
+}
+
+function heroNav(dir) {
+  heroImageIdx = Math.max(0, Math.min(heroImages.length - 1, heroImageIdx + dir));
+  updateHeroSlide();
+  updateHeroNav();
+}
+
+function heroJump(idx) {
+  heroImageIdx = idx;
+  updateHeroSlide();
+  updateHeroNav();
+}
+
+// Redirect mobile devices to /mobile
+if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+  window.location.replace('/mobile');
+}
+
+let reviewsSteamUrl = '';
+let summaryAppid = '';
+let summaryName = '';
+
+function reviewsGoBack() {
+  document.getElementById('reviews-choice').classList.remove('hidden');
+  document.getElementById('reviews-summary-view').classList.add('hidden');
+  document.getElementById('reviews-playtime-view').classList.add('hidden');
+  document.getElementById('reviews-hltb-view').classList.add('hidden');
+}
+
+function openReviewsModal() {
+  if (!currentRawg) return;
+  summaryAppid   = String(currentRawg._appid);
+  summaryName    = currentRawg._name || '';
+  reviewsSteamUrl = `https://store.steampowered.com/app/${summaryAppid}/#app_reviews_hash`;
+  document.getElementById('reviews-modal-title').textContent = `Reviews — ${cleanGameName(summaryName)}`;
+  document.getElementById('reviews-choice').classList.remove('hidden');
+  document.getElementById('reviews-summary-view').classList.add('hidden');
+  document.getElementById('reviews-playtime-view').classList.add('hidden');
+  document.getElementById('reviews-hltb-view').classList.add('hidden');
+  document.getElementById('reviews-modal').classList.add('open');
+}
+
+function closeReviewsModal(e) {
+  if (e && e.target !== document.getElementById('reviews-modal')) return;
+  document.getElementById('reviews-modal').classList.remove('open');
+}
+
+function goToSteamReviews() {
+  window.open(reviewsSteamUrl, '_blank');
+  closeReviewsModal();
+}
+
+async function doHltb() {
+  document.getElementById('reviews-choice').classList.add('hidden');
+  document.getElementById('reviews-summary-view').classList.add('hidden');
+  document.getElementById('reviews-playtime-view').classList.add('hidden');
+  document.getElementById('reviews-hltb-view').classList.remove('hidden');
+  document.getElementById('hltb-body').innerHTML =
+    '<div class="summary-loading"><i class="ti ti-loader spin"></i> Looking up HowLongToBeat…</div>';
+  try {
+    // Try HLTB binary first
+    const r = await fetch(`${proxyBase()}/api/hltb?appid=${encodeURIComponent(summaryAppid)}`);
+    const data = await r.json();
+    if (r.ok && data.available && (data.main || data.extras || data.completionist)) {
+      let html = '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px">';
+      if (data.main)          html += `<div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">Main Story</span><span style="font-weight:500">${esc(data.main)} hrs</span></div>`;
+      if (data.extras)        html += `<div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">Main + Extras</span><span style="font-weight:500">${esc(data.extras)} hrs</span></div>`;
+      if (data.completionist) html += `<div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">Completionist</span><span style="font-weight:500">${esc(data.completionist)} hrs</span></div>`;
+      html += '</div>';
+      html += `<p class="summary-cached">Source: HowLongToBeat · cached indefinitely</p>`;
+      document.getElementById('hltb-body').innerHTML = html;
+      return;
+    }
+    // Fall back to AI playtime
+    document.getElementById('hltb-body').innerHTML =
+      '<div class="summary-loading"><i class="ti ti-loader spin"></i> Not on HLTB, asking AI…</div>';
+    const r2 = await fetch(`${proxyBase()}/api/playtime?appid=${encodeURIComponent(summaryAppid)}&name=${encodeURIComponent(cleanGameName(summaryName))}`);
+    const data2 = await r2.json();
+    if (!r2.ok) throw new Error(data2.error || 'Failed');
+    let html = '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px">';
+    if (data2.main)          html += `<div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">Main Story</span><span style="font-weight:500">${esc(data2.main)}</span></div>`;
+    if (data2.extras)        html += `<div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">Main + Extras</span><span style="font-weight:500">${esc(data2.extras)}</span></div>`;
+    if (data2.completionist) html += `<div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">Completionist</span><span style="font-weight:500">${esc(data2.completionist)}</span></div>`;
+    html += '</div>';
+    if (data2.source && !data2.source.toLowerCase().includes('not found')) {
+      html += `<p class="summary-cached">Source: ${esc(data2.source)} (AI) · cached indefinitely</p>`;
+    }
+    document.getElementById('hltb-body').innerHTML = html;
+  } catch(e) {
+    document.getElementById('hltb-body').innerHTML =
+      `<p style="color:var(--red)">${esc(e.message)}</p>`;
+  }
+}
+
+async function doPlaytime() {
+  document.getElementById('reviews-choice').classList.add('hidden');
+  document.getElementById('reviews-summary-view').classList.add('hidden');
+  document.getElementById('reviews-playtime-view').classList.remove('hidden');
+  document.getElementById('playtime-body').innerHTML =
+    '<div class="summary-loading"><i class="ti ti-loader spin"></i> Searching for playtime data…</div>';
+  try {
+    const r = await fetch(`${proxyBase()}/api/playtime?appid=${encodeURIComponent(summaryAppid)}&name=${encodeURIComponent(cleanGameName(summaryName))}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    let html = '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px">';
+    if (data.main)          html += `<div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">Main Story</span><span style="font-weight:500">${esc(data.main)}</span></div>`;
+    if (data.extras)        html += `<div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">Main + Extras</span><span style="font-weight:500">${esc(data.extras)}</span></div>`;
+    if (data.completionist) html += `<div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">Completionist</span><span style="font-weight:500">${esc(data.completionist)}</span></div>`;
+    html += '</div>';
+    if (data.source && !data.source.toLowerCase().includes('not found') && !data.source.toLowerCase().includes('unavailable')) html += `<p class="summary-cached">Source: ${esc(data.source)} · cached indefinitely</p>`;
+    document.getElementById('playtime-body').innerHTML = html;
+  } catch(e) {
+    document.getElementById('playtime-body').innerHTML =
+      `<p style="color:var(--red)">${esc(e.message)}</p>`;
+  }
+}
+
+async function doSummarize() {
+  document.getElementById('reviews-choice').classList.add('hidden');
+  document.getElementById('reviews-summary-view').classList.remove('hidden');
+  document.getElementById('summary-body').innerHTML =
+    '<div class="summary-loading"><i class="ti ti-loader spin"></i> Summarizing 25 recent reviews…</div>';
+  try {
+    const r = await fetch(`${proxyBase()}/api/summary?appid=${encodeURIComponent(summaryAppid)}&name=${encodeURIComponent(cleanGameName(summaryName))}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    document.getElementById('summary-body').innerHTML =
+      `<p style="margin-bottom:1rem">${esc(data.summary)}</p>
+       <p class="summary-cached">From 25 recent Steam reviews · cached 30 days</p>
+       <a href="${reviewsSteamUrl}" target="_blank" class="reviews-link" style="display:inline-flex;align-items:center;gap:5px;margin-top:10px">
+         <i class="ti ti-brand-steam"></i> Read full reviews on Steam
+       </a>`;
+  } catch(e) {
+    document.getElementById('summary-body').innerHTML =
+      `<p style="color:var(--red)">${esc(e.message)}</p>`;
+  }
+}
+
+// ── Search ───────────────────────────────────────────────────────────────────
+
+let searchTimeout = null;
+
+function openSearch() {
+  closeOverride();
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results-area').innerHTML = '';
+  document.getElementById('search-modal').classList.add('open');
+  setTimeout(() => document.getElementById('search-input').focus(), 100);
+}
+
+function closeSearch(e) {
+  if (e && e.target !== document.getElementById('search-modal')) return;
+  document.getElementById('search-modal').classList.remove('open');
+}
+
+function onSearchInput() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(doSearch, 400);
+}
+
+async function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  document.getElementById('search-results-area').innerHTML =
+    '<div class="search-empty"><i class="ti ti-loader spin"></i> Searching…</div>';
+  try {
+    const r = await fetch(`${proxyBase()}/api/search?q=${encodeURIComponent(q)}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Search failed');
+    if (!data.length) {
+      document.getElementById('search-results-area').innerHTML =
+        '<div class="search-empty">No results found.</div>';
+      return;
+    }
+    const resultsDiv = document.createElement('div');
+    resultsDiv.className = 'search-results';
+    data.forEach(g => {
+      const row = document.createElement('div');
+      row.className = 'search-result';
+      row.innerHTML = `
+        <img class="search-result-thumb"
+             src="${g.tiny_image || 'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/header.jpg'}"
+             alt="${esc(g.name)}" onerror="this.style.background='var(--bg4)'">
+        <div class="search-result-info">
+          <div class="search-result-name">${esc(g.name)}</div>
+          <div class="search-result-meta">${g.metascore ? 'MC ' + g.metascore : ''}</div>
+        </div>
+        <i class="ti ti-chevron-right" style="color:var(--text3);font-size:16px;flex-shrink:0"></i>`;
+      row.addEventListener('click', () => loadSearchResult(g));
+      resultsDiv.appendChild(row);
+    });
+    document.getElementById('search-results-area').innerHTML = '';
+    document.getElementById('search-results-area').appendChild(resultsDiv);
+  } catch(e) {
+    document.getElementById('search-results-area').innerHTML =
+      `<div class="search-empty" style="color:var(--red)">${esc(e.message)}</div>`;
+  }
+}
+
+async function loadSearchResult(g) {
+  document.getElementById('search-modal').classList.remove('open');
+  showHeroLoading(`Looking up ${cleanGameName(g.name)}…`);
+
+  const game = { appid: g.appid, name: g.name, playtime_forever: 0 };
+  currentRawg = null;
+
+  try {
+    const [rawgRes, reviewsRes] = await Promise.all([
+      fetch(`${proxyBase()}/api/rawg?name=${encodeURIComponent(cleanGameName(g.name))}&appid=${g.appid}`),
+      fetch(`${proxyBase()}/api/reviews?appid=${g.appid}`)
+    ]);
+    const [rawg, reviews] = await Promise.all([rawgRes.json(), reviewsRes.json()]);
+    currentRawg = rawg;
+    currentRawg._appid = g.appid;
+    currentRawg._name  = g.name;
+    renderHero(rawg, game);
+    renderReviews(reviews, g.appid);
+    buildHeroImages(rawg, game);
+  } catch(e) {
+    renderHeroFallback(game);
+  }
+}
+
+function openAddTrailer() {
+  document.getElementById('trailer-url-input').value = '';
+  document.getElementById('add-trailer-modal').classList.add('open');
+  setTimeout(() => document.getElementById('trailer-url-input').focus(), 100);
+}
+
+function closeAddTrailer() {
+  document.getElementById('add-trailer-modal').classList.remove('open');
+}
+
+function extractYouTubeId(url) {
+  const patterns = [
+    /[?&]v=([^&#]+)/,
+    /youtu\.be\/([^?&#]+)/,
+    /youtube\.com\/embed\/([^?&#]+)/,
+    /youtube\.com\/shorts\/([^?&#]+)/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+async function applyTrailer() {
+  const url = document.getElementById('trailer-url-input').value.trim();
+  const ytId = extractYouTubeId(url);
+  if (!ytId) {
+    document.getElementById('trailer-url-input').style.borderColor = 'var(--red)';
+    return;
+  }
+  if (!currentRawg) return;
+  closeAddTrailer();
+
+  // Save to backend
+  await fetch(`${proxyBase()}/api/trailer_override?appid=${currentRawg._appid}&youtube_id=${ytId}`, { method: 'POST' });
+
+  // Update hero immediately
+  currentRawg.trailer = `https://www.youtube.com/embed/${ytId}`;
+  currentRawg.trailer_type = 'youtube';
+  heroImages[0] = { type: 'youtube', src: `https://www.youtube.com/embed/${ytId}` };
+  heroImageIdx = 0;
+  updateHeroSlide();
+  updateHeroDots();
+  document.getElementById('btn-trailer').classList.remove('hidden');
+  document.getElementById('btn-add-trailer').classList.add('hidden');
+}
+
+async function steamOverride() {
+  if (!currentRawg) return;
+  showHeroLoading('Fetching from Steam…');
+  const game = { appid: currentRawg._appid, name: currentRawg._name, playtime_forever: 0 };
+  try {
+    const [rawgRes, reviewsRes] = await Promise.all([
+      fetch(`${proxyBase()}/api/rawg?name=${encodeURIComponent(cleanGameName(currentRawg._name))}&appid=${currentRawg._appid}&steam_override=true`),
+      fetch(`${proxyBase()}/api/reviews?appid=${currentRawg._appid}`)
+    ]);
+    const [rawg, reviews] = await Promise.all([rawgRes.json(), reviewsRes.json()]);
+    currentRawg = rawg;
+    currentRawg._appid = game.appid;
+    currentRawg._name  = game.name;
+    renderHero(rawg, game);
+    renderReviews(reviews, game.appid);
+    buildHeroImages(rawg, game);
+  } catch(e) {
+    renderHeroFallback(game);
+  }
+}
+
+function openOverride() {
+  if (!currentRawg) return;
+  document.getElementById('search-modal').classList.remove('open');
+  const current = document.getElementById('btn-rawg').href || '';
+  const slug = current.includes('rawg.io/games/') ? current.split('rawg.io/games/')[1].replace(/\/$/, '') : '';
+  document.getElementById('override-input').value = slug;
+  document.getElementById('override-modal').classList.add('open');
+  setTimeout(() => document.getElementById('override-input').focus(), 100);
+}
+
+function closeOverride() {
+  document.getElementById('override-modal').classList.remove('open');
+}
+
+async function applyOverride() {
+  let val = document.getElementById('override-input').value.trim();
+  if (!val) return;
+  // Extract slug from URL if pasted
+  if (val.includes('rawg.io/games/')) {
+    val = val.split('rawg.io/games/')[1].replace(/\/$/, '').split('/')[0];
+  }
+  if (!currentRawg) return;
+  closeOverride();
+  showHeroLoading('Fetching correct game data…');
+
+  const game = { appid: currentRawg._appid, name: currentRawg._name, playtime_forever: 0 };
+  try {
+    // Fetch directly by slug, bypassing name-based cache
+    const [rawgRes, reviewsRes] = await Promise.all([
+      fetch(`${proxyBase()}/api/rawg?name=${encodeURIComponent(val)}&appid=${currentRawg._appid}&slug_override=${encodeURIComponent(val)}`),
+      fetch(`${proxyBase()}/api/reviews?appid=${currentRawg._appid}`)
+    ]);
+    const [rawg, reviews] = await Promise.all([rawgRes.json(), reviewsRes.json()]);
+    if (rawg.error) throw new Error(rawg.error);
+    currentRawg = rawg;
+    currentRawg._appid = game.appid;
+    currentRawg._name  = game.name;
+    renderHero(rawg, game);
+    renderReviews(reviews, game.appid);
+    buildHeroImages(rawg, game);
+  } catch(e) {
+    renderHeroFallback(game);
+  }
+}
+
+function openSettings() {
+  document.getElementById('settings-modal').classList.toggle('open');
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').classList.remove('open');
+}
+
+// Close settings if clicking outside
+document.addEventListener('click', e => {
+  const modal = document.getElementById('settings-modal');
+  const btn = e.target.closest('[onclick="openSettings()"]');
+  if (!btn && !modal.contains(e.target)) closeSettings();
+});
+
+async function clearCache(type) {
+  const status = document.getElementById('cache-status');
+  status.style.display = 'none';
+  try {
+    const r = await fetch(`${proxyBase()}/api/cache/clear?type=${type}`, { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      status.style.display = 'block';
+      setTimeout(() => { status.style.display = 'none'; }, 2000);
+    }
+  } catch(e) {}
+}
+
+// ── Snooze / Remind Me ─────────────────────────────────────────────────────
+
+let snoozedAppids = new Set();
+
+async function loadSnoozed() {
+  try {
+    const r = await fetch(`${proxyBase()}/api/snooze`);
+    const data = await r.json();
+    snoozedAppids = new Set([
+      ...data.snoozed.map(g => String(g.appid)),
+      ...data.due.map(g => String(g.appid))
+    ]);
+    const dueCount = data.due.length;
+    const badge = document.getElementById('bell-badge');
+    if (dueCount > 0) {
+      badge.textContent = dueCount;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch(e) {}
+}
+
+function openBell() {
+  document.getElementById('settings-modal').classList.remove('open');
+  const modal = document.getElementById('bell-modal');
+  modal.classList.toggle('open');
+  if (modal.classList.contains('open')) renderBellContent();
+}
+
+async function renderBellContent() {
+  try {
+    const r = await fetch(`${proxyBase()}/api/snooze`);
+    const data = await r.json();
+    const all = [...data.due, ...data.snoozed];
+    if (!all.length) {
+      document.getElementById('bell-content').innerHTML = '<div class="bell-empty">No reminders set</div>';
+      return;
+    }
+    document.getElementById('bell-content').innerHTML = all.map(g => `
+      <div class="snooze-item">
+        <img class="snooze-thumb" src="https://cdn.akamai.steamstatic.com/steam/apps/${g.appid}/header.jpg" onerror="this.style.background='var(--bg4)'" onclick="loadSnoozedGame(${g.appid}, '${esc(g.name)}')" style="cursor:pointer">
+        <div class="snooze-info">
+          <div class="snooze-name">${esc(g.name)}</div>
+          <div class="snooze-date ${g.due ? 'snooze-due' : ''}">${g.due ? '⏰ Due now!' : `${g.days_left} days left`}</div>
+        </div>
+        <div class="snooze-actions">
+          <button class="snooze-btn" onclick="snoozeAgain(${g.appid}, '${esc(g.name)}')">+30d</button>
+          <button class="snooze-btn" onclick="unsnooze(${g.appid})" style="color:var(--red)">✕</button>
+        </div>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+document.addEventListener('click', e => {
+  const bell = document.getElementById('bell-modal');
+  const bellBtn = e.target.closest('#btn-bell');
+  if (!bellBtn && bell && !bell.contains(e.target)) bell.classList.remove('open');
+});
+
+function openRemind() {
+  if (!currentRawg) return;
+  document.getElementById('remind-title').textContent = `Remind me about ${cleanGameName(currentRawg._name || '')} in…`;
+  document.getElementById('remind-modal').classList.add('open');
+}
+
+function closeRemind() {
+  document.getElementById('remind-modal').classList.remove('open');
+}
+
+async function loadSnoozedGame(appid, name) {
+  document.getElementById('bell-modal').classList.remove('open');
+  const game = { appid, name, playtime_forever: 0 };
+  const proxy = typeof proxyBase === 'function' ? proxyBase() : window.location.origin;
+  try {
+    const [rawgRes, reviewsRes] = await Promise.all([
+      fetch(`${proxy}/api/rawg?name=${encodeURIComponent(cleanGameName(name))}&appid=${appid}`),
+      fetch(`${proxy}/api/reviews?appid=${appid}`)
+    ]);
+    const [rawg, reviews] = await Promise.all([rawgRes.json(), reviewsRes.json()]);
+    currentRawg = rawg;
+    currentRawg._appid = appid;
+    currentRawg._name = name;
+    if (typeof renderHero === 'function') { renderHero(rawg, game); renderReviews(reviews, appid); buildHeroImages(rawg, game); }
+    else { renderInfo(rawg, game); renderReviews(reviews, appid); buildHeroImages(rawg, game); }
+  } catch(e) {}
+}
+
+async function snoozeGame(days) {
+  if (!currentRawg) return;
+  closeRemind();
+  await fetch(`${proxyBase()}/api/snooze?appid=${currentRawg._appid}&name=${encodeURIComponent(currentRawg._name || '')}&days=${days}`, { method: 'POST' });
+  snoozedAppids.add(String(currentRawg._appid));
+  await loadSnoozed();
+  // Reroll to exclude this game
+  reroll();
+}
+
+async function snoozeAgain(appid, name) {
+  await fetch(`${proxyBase()}/api/snooze?appid=${appid}&name=${encodeURIComponent(name)}&days=30`, { method: 'POST' });
+  renderBellContent();
+  await loadSnoozed();
+}
+
+async function unsnooze(appid) {
+  await fetch(`${proxyBase()}/api/snooze?appid=${appid}`, { method: 'DELETE' });
+  snoozedAppids.delete(String(appid));
+  renderBellContent();
+  await loadSnoozed();
+}
+
+async function prefillConfig() {
+  try {
+    const r = await fetch('/api/config');
+    const data = await r.json();
+    if (data.steam_id) {
+      document.getElementById('steamid').value = data.steam_id;
+      await startApp();
+    }
+  } catch(e) {}
+}
+prefillConfig();
+
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+
+</script>
+</body>
+</html>

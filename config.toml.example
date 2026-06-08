@@ -1,0 +1,21 @@
+# steam-backlog config
+# Place this file in the same folder as the binary
+
+STEAM_API_KEY = ""
+RAWG_API_KEY  = ""
+STEAM_ID      = ""
+ANTHROPIC_API_KEY = ""
+
+# Cache settings
+# How long to keep cached game data (days)
+CACHE_TTL_DAYS = 7
+# How long to cache your actual library list
+LIBRARY_CACHE_TTL_HOURS = 24
+# Set to true to cache images locally (for offline use)
+CACHE_IMAGES   = false
+# Optional — defaults to 3000
+# PORT = 3950
+DEBUG = false
+
+# HowLongToBeat via third-party API (comment out to disable)
+#HLTB_API_URL = "http://127.0.0.1:9234"

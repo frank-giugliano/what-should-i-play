@@ -1,0 +1,18 @@
+[package]
+name = "steam-backlog"
+version = "0.2.0"
+edition = "2021"
+
+[[bin]]
+name = "steam-backlog"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tower-http = { version = "0.5", features = ["cors"] }
+urlencoding = "2"
+rusqlite = { version = "0.31", features = ["bundled"] }
