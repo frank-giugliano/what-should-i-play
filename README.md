@@ -50,7 +50,7 @@ Grab the latest release from the [Releases](../../releases) page, or build from 
 ### Build from source
 
 ```bash
-git clone https://github.com/yourusername/what-should-i-play
+git clone https://github.com/frank-giugliano/what-should-i-play
 cd what-should-i-play
 cargo build --release
 ```
