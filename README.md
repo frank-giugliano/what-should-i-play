@@ -27,8 +27,8 @@ A self-hosted Steam backlog browser that helps you decide what to play next. Bui
 
 ## Screenshots
 
-|---|---|---|
-| ![Reviews](screenshots/reviewsmodal.png) | ![Summary](screenshots/reviewsummary.png) | ![HLTB](screenshots/hltb.png) |
+
+ ![Reviews](screenshots/reviewsmodal.png)  ![Summary](screenshots/reviewsummary.png)  ![HLTB](screenshots/hltb.png) |
 
 ---
 
