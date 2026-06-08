@@ -43,10 +43,6 @@ A self-hosted Steam backlog browser that helps you decide what to play next. Bui
 
 ## Installation
 
-### Download binary
-
-Grab the latest release from the [Releases](../../releases) page, or build from source.
-
 ### Build from source
 
 ```bash
