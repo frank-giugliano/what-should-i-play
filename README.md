@@ -29,7 +29,7 @@ A self-hosted Steam backlog browser that helps you decide what to play next. Bui
 
 | Desktop | Mobile |
 |---|---|
-| ![Desktop](screenshots/desktop.png) | ![Mobile](screenshots/mobile_hero.png) |
+| ![Desktop](screenshots/reviewsmodal.png) | ![Mobile](screenshots/reviewsummary.png) | ![Mobile](screenshots/hltb.png) |
 
 ---
 
