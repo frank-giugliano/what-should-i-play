@@ -88,39 +88,6 @@ DEBUG                   = false
 
 Then open `http://localhost:3000` in your browser.
 
----
-
-## Running as a service (Linux)
-
-Create `/etc/systemd/system/what-should-i-play.service`:
-
-```ini
-[Unit]
-Description=What Should I Play
-After=network.target
-
-[Service]
-Type=simple
-User=youruser
-WorkingDirectory=/path/to/binary
-ExecStart=/path/to/binary/steam-backlog
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl enable what-should-i-play
-sudo systemctl start what-should-i-play
-```
-
----
-
-## Mobile PWA
-
-Open `http://yourserver:3000/mobile` in Safari on iOS, tap **Share → Add to Home Screen**. On Android, tap the browser menu and select **Add to Home Screen**.
 
 ---
 
@@ -137,8 +104,4 @@ Supports an optional companion binary for HowLongToBeat data. If you have one ru
 - **Frontend** — Vanilla HTML/CSS/JS, Tabler Icons
 - **Deployment** — Single binary, systemd service
 
----
 
-## License
-
-MIT
