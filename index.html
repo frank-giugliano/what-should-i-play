@@ -488,7 +488,7 @@ async function startApp() {
 
     allGames = data.response.games;
     unplayed = allGames.filter(g => !g.playtime_forever);
-    loadSnoozed();
+    await loadSnoozed();
 
     document.getElementById('stat-total').textContent    = allGames.length.toLocaleString();
     document.getElementById('stat-unplayed').textContent = unplayed.length.toLocaleString();

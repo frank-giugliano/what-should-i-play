@@ -440,7 +440,7 @@ async function startApp() {
     if (!r.ok) throw new Error(data.error || 'Server error');
     if (!data.response?.games) throw new Error('No games returned. Is your Steam profile public?');
     allGames = data.response.games;
-    loadSnoozed();
+    await loadSnoozed();
     unplayed = allGames.filter(g => !g.playtime_forever);
     document.getElementById('setup-screen').style.display = 'none';
     document.getElementById('app').classList.add('visible');
