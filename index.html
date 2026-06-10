@@ -513,6 +513,8 @@ function shuffleArray(arr) {
   return a;
 }
 
+const recentlyShown = new Set();
+
 function pickCandidates() {
   let pool;
   if (poolMode === 'unplayed')      pool = allGames.filter(g => !g.playtime_forever);
@@ -520,8 +522,19 @@ function pickCandidates() {
   else                              pool = [...allGames];
   // Exclude snoozed games
   pool = pool.filter(g => !snoozedAppids.has(String(g.appid)));
-  pool = shuffleArray(pool);
-  return pool.slice(0, CANDIDATE_COUNT);
+  // History size = 25% of pool, minimum 20
+  const maxHistory = Math.max(20, Math.floor(pool.length * 0.33));
+  // Exclude recently shown, unless pool is too small
+  const fresh = pool.filter(g => !recentlyShown.has(g.appid));
+  const source = fresh.length >= CANDIDATE_COUNT ? fresh : pool;
+  const picks = shuffleArray(source).slice(0, CANDIDATE_COUNT);
+  picks.forEach(g => {
+    recentlyShown.add(g.appid);
+    if (recentlyShown.size > maxHistory) {
+      recentlyShown.delete(recentlyShown.values().next().value);
+    }
+  });
+  return picks;
 }
 
 async function setPool(mode) {

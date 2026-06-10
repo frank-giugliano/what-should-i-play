@@ -452,17 +452,33 @@ async function startApp() {
   }
 }
 
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const recentlyShown = new Set();
+
 function pickCandidates() {
   let pool;
   if (poolMode === 'unplayed')     pool = allGames.filter(g => !g.playtime_forever);
   else if (poolMode === 'under2h') pool = allGames.filter(g => (g.playtime_forever || 0) < 120);
   else                             pool = [...allGames];
-  pool = [...pool];
-  const picks = [];
-  while (picks.length < Math.min(CANDIDATE_COUNT, pool.length)) {
-    const idx = Math.floor(Math.random() * pool.length);
-    picks.push(pool.splice(idx, 1)[0]);
-  }
+  pool = pool.filter(g => !snoozedAppids.has(String(g.appid)));
+  const maxHistory = Math.max(20, Math.floor(pool.length * 0.33));
+  const fresh = pool.filter(g => !recentlyShown.has(g.appid));
+  const source = fresh.length >= CANDIDATE_COUNT ? fresh : pool;
+  const picks = shuffleArray(source).slice(0, CANDIDATE_COUNT);
+  picks.forEach(g => {
+    recentlyShown.add(g.appid);
+    if (recentlyShown.size > maxHistory) {
+      recentlyShown.delete(recentlyShown.values().next().value);
+    }
+  });
   return picks;
 }
 
