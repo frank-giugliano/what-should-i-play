@@ -650,7 +650,9 @@ function renderHero(d, game) {
   let scoreBadge = '';
   if (score) {
     const cls = score >= 75 ? 'score-great' : score >= 50 ? 'score-ok' : 'score-bad';
-    scoreBadge = `<span class="meta-score"><span class="score-badge ${cls}">MC ${score}</span></span><span class="meta-dot">·</span>`;
+    const mcUrl = d.metacritic_url || '';
+    const badge = `<span class="score-badge ${cls}">MC ${score}</span>`;
+    scoreBadge = `<span class="meta-score">${mcUrl ? `<a href="${mcUrl}" target="_blank" style="text-decoration:none">${badge}</a>` : badge}</span><span class="meta-dot">·</span>`;
   }
   const released = d.released ? new Date(d.released).getFullYear() : '';
   const playtime = d.playtime ? `~${d.playtime}h avg` : '';

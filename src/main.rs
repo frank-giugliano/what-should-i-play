@@ -702,7 +702,7 @@ async fn build_response_steam_primary(
         .map(|s| s.starts_with("steam:"))
         .unwrap_or(false);
 
-    let (metacritic, playtime, trailer, trailer_preview, rawg_bg, rawg_screenshots, rawg_slug) = if !rawg_key.is_empty() && !is_steam_override {
+    let (metacritic, playtime, trailer, trailer_preview, rawg_bg, rawg_screenshots, rawg_slug, metacritic_url) = if !rawg_key.is_empty() && !is_steam_override {
         let slug = name.to_lowercase()
             .chars().map(|c| if c.is_alphanumeric() { c } else { '-' })
             .collect::<String>()
@@ -789,9 +789,10 @@ async fn build_response_steam_primary(
             rawg_bg,
             rawg_shots,
             rawg_slug,
+            rawg_detail["metacritic_url"].clone(),
         )
     } else {
-        (Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, String::new())
+        (Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, String::new(), Value::Null)
     };
 
     // Metacritic from Steam if RAWG didn't have it
@@ -842,6 +843,7 @@ async fn build_response_steam_primary(
         "screenshots":      final_screenshots,
         "trailer":          trailer,
         "trailer_preview":  trailer_preview,
+        "metacritic_url":   metacritic_url,
         "rawg_url":         if rawg_slug.is_empty() {
                                 json!(format!("https://store.steampowered.com/app/{}", appid))
                             } else {
