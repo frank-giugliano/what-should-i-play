@@ -580,7 +580,7 @@ function renderCandidates() {
     <div class="candidate ${i === activeIdx ? 'active' : ''}" id="cand-${i}" onclick="selectCandidate(${i})">
       <img class="candidate-thumb"
            src="https://cdn.akamai.steamstatic.com/steam/apps/${g.appid}/header.jpg"
-           alt="${esc(g.name)}" onerror="this.style.background='var(--bg4)'">
+           alt="${esc(g.name)}" onerror="fetchAndFixImage(this, ${g.appid})">
       <div class="candidate-name">${esc(cleanGameName(g.name))}</div>
     </div>`).join('');
 }
@@ -1039,7 +1039,7 @@ async function doSearch() {
       row.innerHTML = `
         <img class="search-result-thumb"
              src="${g.tiny_image || 'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/header.jpg'}"
-             alt="${esc(g.name)}" onerror="this.style.background='var(--bg4)'">
+             alt="${esc(g.name)}" onerror="fetchAndFixImage(this, ${g.appid})">
         <div class="search-result-info">
           <div class="search-result-name">${esc(g.name)}</div>
           <div class="search-result-meta">${g.metascore ? 'MC ' + g.metascore : ''}</div>
@@ -1144,6 +1144,7 @@ async function steamOverride() {
     renderHero(rawg, game);
     renderReviews(reviews, game.appid);
     buildHeroImages(rawg, game);
+    // Cache header image and fix broken thumbnail in place
   } catch(e) {
     renderHeroFallback(game);
   }
@@ -1189,6 +1190,7 @@ async function applyOverride() {
     renderHero(rawg, game);
     renderReviews(reviews, game.appid);
     buildHeroImages(rawg, game);
+    // Cache header image and fix broken thumbnail in place
   } catch(e) {
     renderHeroFallback(game);
   }
@@ -1218,6 +1220,33 @@ async function clearCache(type) {
     if (data.ok) {
       status.style.display = 'block';
       setTimeout(() => { status.style.display = 'none'; }, 2000);
+    }
+  } catch(e) {}
+}
+
+// ── Game Image Cache ────────────────────────────────────────────────────────
+
+async function fetchAndFixImage(img, appid) {
+  img.onerror = null;
+  try {
+    const r = await fetch(`${proxyBase()}/api/game_image?appid=${appid}`);
+    const data = await r.json();
+    if (data.url) { img.src = data.url; }
+    else { img.style.background = 'var(--bg4)'; }
+  } catch(e) { img.style.background = 'var(--bg4)'; }
+}
+
+async function cacheGameImage(appid) {
+  try {
+    const r = await fetch(`${proxyBase()}/api/game_image?appid=${appid}`);
+    const data = await r.json();
+    if (data.url) {
+      const idx = candidates.findIndex(g => g.appid == appid);
+      const card = document.getElementById(`cand-${idx}`);
+      if (card) {
+        const img = card.querySelector('.candidate-thumb');
+        if (img && img.naturalWidth === 0) img.src = data.url;
+      }
     }
   } catch(e) {}
 }

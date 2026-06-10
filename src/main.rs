@@ -44,6 +44,11 @@ impl Cache {
                 appid       TEXT PRIMARY KEY,
                 data        TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS game_images (
+                appid       TEXT PRIMARY KEY,
+                header_url  TEXT NOT NULL,
+                cached_at   INTEGER NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS snoozed (
                 appid       TEXT PRIMARY KEY,
                 name        TEXT NOT NULL,
@@ -136,6 +141,29 @@ impl Cache {
             let _ = conn.execute(
                 "INSERT OR REPLACE INTO library_cache (steam_id, data, cached_at) VALUES (?1, ?2, ?3)",
                 params![steam_id, data.to_string(), Self::now()],
+            );
+        }
+    }
+
+    fn get_game_image(&self, appid: &str) -> Option<String> {
+        let conn = self.conn.lock().ok()?;
+        let ttl = self.ttl * 4; // 30 days roughly
+        let result: rusqlite::Result<(String, u64)> = conn.query_row(
+            "SELECT header_url, cached_at FROM game_images WHERE appid = ?1",
+            params![appid],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        );
+        match result {
+            Ok((url, cached_at)) if Self::now() - cached_at < ttl => Some(url),
+            _ => None,
+        }
+    }
+
+    fn set_game_image(&self, appid: &str, url: &str) {
+        if let Ok(conn) = self.conn.lock() {
+            let _ = conn.execute(
+                "INSERT OR REPLACE INTO game_images (appid, header_url, cached_at) VALUES (?1, ?2, ?3)",
+                params![appid, url, Self::now()],
             );
         }
     }
@@ -991,6 +1019,28 @@ async fn search_games(Query(params): Query<SearchQuery>) -> Response {
     }
 }
 
+async fn get_game_image_handler(State(cache): State<Cache>, Query(params): Query<ReviewsQuery>) -> Response {
+    // Check cache first
+    if let Some(url) = cache.get_game_image(&params.appid) {
+        return Json(json!({ "url": url })).into_response();
+    }
+    // Fetch from Steam appdetails
+    let client = reqwest::Client::builder()
+        .user_agent("SteamBacklogBrowser/1.0")
+        .build()
+        .unwrap_or_default();
+    let appid: u64 = params.appid.parse().unwrap_or(0);
+    let steam = fetch_steam_appdetails(&client, appid).await;
+    if !steam.is_null() {
+        let url = steam["header_image"].as_str().unwrap_or("");
+        if !url.is_empty() {
+            cache.set_game_image(&params.appid, url);
+            return Json(json!({ "url": url })).into_response();
+        }
+    }
+    Json(json!({ "url": null })).into_response()
+}
+
 async fn get_hltb_data(State(cache): State<Cache>, Query(params): Query<ReviewsQuery>) -> Response {
     let base = hltb_url();
     if base.is_empty() {
@@ -1280,6 +1330,7 @@ async fn main() {
         .route("/api/playtime",            get(get_playtime))
         .route("/api/snooze",              get(get_snoozed).post(set_snooze).delete(remove_snooze))
         .route("/api/hltb",                get(get_hltb_data))
+        .route("/api/game_image",          get(get_game_image_handler))
         .route("/api/config",              get(get_config))
         .route("/img_cache/:filename",     get(serve_image))
         .with_state(cache)

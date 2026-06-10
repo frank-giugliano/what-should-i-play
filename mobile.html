@@ -505,7 +505,7 @@ function renderCandidates() {
     candidates.map((g, i) => `
       <div class="candidate ${i === activeIdx ? 'active' : ''}" id="cand-${i}" onclick="selectCandidate(${i})">
         <img class="candidate-thumb" src="https://cdn.akamai.steamstatic.com/steam/apps/${g.appid}/header.jpg"
-             alt="${esc(cleanGameName(g.name))}" onerror="this.style.background='var(--bg4)'">
+             alt="${esc(cleanGameName(g.name))}" onerror="fetchAndFixImage(this, ${g.appid})">
         <div class="candidate-name">${esc(cleanGameName(g.name))}</div>
       </div>`).join('');
 }
@@ -886,7 +886,7 @@ async function doSearch() {
       row.innerHTML = `
         <img class="search-result-thumb"
              src="${g.tiny_image || 'https://cdn.akamai.steamstatic.com/steam/apps/' + g.appid + '/header.jpg'}"
-             alt="${esc(g.name)}" onerror="this.style.background='var(--bg4)'">
+             alt="${esc(g.name)}" onerror="fetchAndFixImage(this, ${g.appid})">
         <div class="search-result-info">
           <div class="search-result-name">${esc(g.name)}</div>
           <div class="search-result-meta">${g.metascore ? 'MC ' + g.metascore : ''}</div>
@@ -1189,6 +1189,32 @@ async function unsnooze(appid) {
   snoozedAppids.delete(String(appid));
   renderBellContent();
   await loadSnoozed();
+}
+
+async function fetchAndFixImage(img, appid) {
+  img.onerror = null;
+  try {
+    const r = await fetch(`${proxy}/api/game_image?appid=${appid}`);
+    const data = await r.json();
+    if (data.url) { img.src = data.url; }
+    else { img.style.background = 'var(--bg4)'; }
+  } catch(e) { img.style.background = 'var(--bg4)'; }
+}
+
+async function cacheGameImage(appid) {
+  try {
+    const r = await fetch(`${proxy}/api/game_image?appid=${appid}`);
+    const data = await r.json();
+    if (data.url) {
+      const strip = document.getElementById('candidates-strip');
+      if (strip) {
+        const imgs = strip.querySelectorAll('.candidate-thumb');
+        imgs.forEach(img => {
+          if (img.dataset.appid == appid && img.naturalWidth === 0) img.src = data.url;
+        });
+      }
+    }
+  } catch(e) {}
 }
 
 async function prefillConfig() {
