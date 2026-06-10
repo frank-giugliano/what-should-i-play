@@ -1,0 +1,25 @@
+# hltb configuration
+# copy to whatever directory you're running the binary from. 
+#
+# Brave Search API (required):
+#   1. Go to https://api.search.brave.com
+#   2. Create a free account
+#   3. Subscribe to the free tier (2000 queries/month, no credit card)
+#   4. Copy your API key
+#
+# Claude API (optional, enables fallback for games not on HLTB):
+#   https://console.anthropic.com
+
+#Brave Search API Key
+[search]
+api_key = ""
+
+#This is a fallback in case it cannot find the title via HLTB it will try to search the web for reviews/discussions on steam or reddit etc...
+[claude]
+api_key = ""
+
+fallback_enabled = false
+
+[server]
+port = 9234
+verbose = false
