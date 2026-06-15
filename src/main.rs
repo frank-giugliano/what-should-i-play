@@ -1081,13 +1081,12 @@ async fn get_hltb_data(State(cache): State<Cache>, Query(params): Query<ReviewsQ
 }
 
 async fn get_snoozed(State(cache): State<Cache>) -> Response {
-    let now = Cache::now();
     if let Ok(conn) = cache.conn.lock() {
         let mut stmt = match conn.prepare(
             "SELECT appid, name, wake_date FROM snoozed ORDER BY wake_date ASC"
         ) {
             Ok(s) => s,
-            Err(_) => return Json(json!({ "snoozed": [], "due": [] })).into_response(),
+            Err(_) => return Json(json!({ "games": [] })).into_response(),
         };
         let rows: Vec<Value> = {
             let mapped = stmt.query_map([], |row| {
@@ -1098,18 +1097,13 @@ async fn get_snoozed(State(cache): State<Cache>) -> Response {
                     "appid": appid,
                     "name": name,
                     "wake_date": wake_date,
-                    "due": (wake_date as u64) <= now,
-                    "days_left": if (wake_date as u64) > now { ((wake_date as u64 - now) / 86400) as i64 } else { 0 },
                 })).collect(),
                 Err(_) => vec![],
             }
         };
-
-        let due: Vec<&Value> = rows.iter().filter(|r| r["due"].as_bool().unwrap_or(false)).collect();
-        let snoozed: Vec<&Value> = rows.iter().filter(|r| !r["due"].as_bool().unwrap_or(false)).collect();
-        return Json(json!({ "snoozed": snoozed, "due": due })).into_response();
+        return Json(json!({ "games": rows })).into_response();
     }
-    Json(json!({ "snoozed": [], "due": [] })).into_response()
+    Json(json!({ "games": [] })).into_response()
 }
 
 async fn set_snooze(State(cache): State<Cache>, Query(params): Query<SnoozeQuery>) -> Response {

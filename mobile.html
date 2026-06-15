@@ -1089,15 +1089,23 @@ async function steamOverride() {
 
 let snoozedAppids = new Set();
 
+function snoozeStatus(wakeTs) {
+  const wake = new Date(wakeTs * 1000);
+  const wakeDay = new Date(wake.getFullYear(), wake.getMonth(), wake.getDate());
+  const today = new Date();
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const due = todayDay >= wakeDay;
+  const daysLeft = Math.max(0, Math.round((wakeDay - todayDay) / 86400000));
+  return { due, daysLeft };
+}
+
 async function loadSnoozed() {
   try {
     const r = await fetch(`${proxy}/api/snooze`);
     const data = await r.json();
-    snoozedAppids = new Set([
-      ...data.snoozed.map(g => String(g.appid)),
-      ...data.due.map(g => String(g.appid))
-    ]);
-    const dueCount = data.due.length;
+    const games = data.games || [];
+    snoozedAppids = new Set(games.map(g => String(g.appid)));
+    const dueCount = games.filter(g => snoozeStatus(g.wake_date).due).length;
     const badge = document.getElementById('bell-badge');
     if (dueCount > 0) { badge.textContent = dueCount; badge.style.display = 'flex'; }
     else badge.style.display = 'none';
@@ -1121,17 +1129,18 @@ async function renderBellContent() {
   try {
     const r = await fetch(`${proxy}/api/snooze`);
     const data = await r.json();
-    const all = [...data.due, ...data.snoozed];
-    if (!all.length) {
+    const games = (data.games || []).map(g => ({ ...g, ...snoozeStatus(g.wake_date) }));
+    games.sort((a, b) => (b.due - a.due) || (a.daysLeft - b.daysLeft));
+    if (!games.length) {
       document.getElementById('bell-content').innerHTML = '<div class="bell-empty">No reminders set</div>';
       return;
     }
-    document.getElementById('bell-content').innerHTML = all.map(g => `
+    document.getElementById('bell-content').innerHTML = games.map(g => `
       <div class="snooze-item">
         <img class="snooze-thumb" src="https://cdn.akamai.steamstatic.com/steam/apps/${g.appid}/header.jpg" onerror="this.style.background='var(--bg4)'" onclick="loadSnoozedGame(${g.appid}, '${esc(g.name)}')" style="cursor:pointer">
         <div class="snooze-info">
           <div class="snooze-name">${esc(g.name)}</div>
-          <div class="snooze-date ${g.due ? 'snooze-due' : ''}">${g.due ? '⏰ Due now!' : `${g.days_left} days left`}</div>
+          <div class="snooze-date ${g.due ? 'snooze-due' : ''}">${g.due ? '⏰ Due now!' : `${g.daysLeft} ${g.daysLeft === 1 ? 'day' : 'days'} left`}</div>
         </div>
         <div class="snooze-actions">
           <button class="snooze-btn" onclick="snoozeAgain(${g.appid}, '${esc(g.name)}')">+30d</button>
