@@ -568,10 +568,13 @@ async function reroll() {
   v.pause(); v.src = ''; v.style.opacity = '0';
   document.getElementById('hero-unmute').classList.add('hidden');
   renderCandidates();
-  // Clear old prefetch data and kick off background prefetch for new candidates
+  // Clear old prefetch data
   Object.keys(prefetchCache).forEach(k => delete prefetchCache[k]);
-  candidates.forEach(g => prefetchCandidate(g));
+  // Fetch the first candidate directly, then show it
+  await prefetchCandidate(candidates[0]);
   await selectCandidate(0);
+  // Prefetch the rest in the background
+  candidates.slice(1).forEach(g => prefetchCandidate(g));
 }
 
 function renderCandidates() {

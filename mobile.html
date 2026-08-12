@@ -495,8 +495,9 @@ async function reroll() {
   activeIdx = 0;
   Object.keys(prefetchCache).forEach(k => delete prefetchCache[k]);
   renderCandidates();
-  candidates.forEach(g => prefetchCandidate(g));
+  await prefetchCandidate(candidates[0]);
   await selectCandidate(0);
+  candidates.slice(1).forEach(g => prefetchCandidate(g));
 }
 
 function renderCandidates() {

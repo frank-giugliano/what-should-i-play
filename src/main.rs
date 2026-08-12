@@ -588,7 +588,7 @@ fn inject_yt_trailer(cache: &Cache, response: &Value, appid: Option<u64>) -> Val
 }
 
 async fn get_rawg(State(cache): State<Cache>, Query(params): Query<RawgQuery>) -> Response {
-    let key = rawg_key();
+    let _key = rawg_key();
 
     println!("RAWG request for: {}", params.name);
 
@@ -609,7 +609,7 @@ async fn get_rawg(State(cache): State<Cache>, Query(params): Query<RawgQuery>) -
             let _ = conn.execute("DELETE FROM slug_overrides WHERE game_name = ?1", params![&params.name]);
         }
         if let Some(appid) = params.appid {
-            let client = reqwest::Client::builder().user_agent("SteamBacklogBrowser/1.0").build().unwrap_or_default();
+            let client = reqwest::Client::builder().user_agent("SteamBacklogBrowser/1.0").timeout(std::time::Duration::from_secs(8)).build().unwrap_or_default();
             let steam = fetch_steam_appdetails(&client, appid).await;
             if !steam.is_null() {
                 let response = build_response_steam_primary_skip_rawg(&client, &cache, &steam, appid, params.appid).await;
@@ -620,7 +620,7 @@ async fn get_rawg(State(cache): State<Cache>, Query(params): Query<RawgQuery>) -
         }
     }
 
-    let client = reqwest::Client::builder().user_agent("SteamBacklogBrowser/1.0").build().unwrap_or_default();
+    let client = reqwest::Client::builder().user_agent("SteamBacklogBrowser/1.0").timeout(std::time::Duration::from_secs(8)).build().unwrap_or_default();
 
     // Check permanent slug override
     let override_slug = cache.get_slug_override(&params.name);
@@ -637,20 +637,17 @@ async fn get_rawg(State(cache): State<Cache>, Query(params): Query<RawgQuery>) -
                 if appid > 0 {
                     let steam = fetch_steam_appdetails(&client, appid).await;
                     if !steam.is_null() {
-                        let response = build_response_steam_primary(&client, &cache, &steam, appid, &key, &params.name, params.appid).await;
+                        let response = build_response_steam_primary_skip_rawg(&client, &cache, &steam, appid, params.appid).await;
                         cache.set_rawg(&params.name, &response);
                         return Json(response).into_response();
                     }
                 }
             } else {
-                // RAWG slug override — fetch trailer/metacritic from RAWG, everything else from Steam
+                // Legacy RAWG slug override — now served from Steam
                 if let Some(appid) = params.appid {
                     let steam = fetch_steam_appdetails(&client, appid).await;
                     if !steam.is_null() {
-                        let response = build_response_steam_primary(&client, &cache, &steam, appid, &key, &params.name, params.appid).await;
-                        if params.slug_override.as_deref().filter(|s| !s.is_empty()).is_some() {
-                            cache.set_slug_override(&params.name, slug);
-                        }
+                        let response = build_response_steam_primary_skip_rawg(&client, &cache, &steam, appid, params.appid).await;
                         cache.set_rawg(&params.name, &response);
                         return Json(response).into_response();
                     }
@@ -670,14 +667,14 @@ async fn get_rawg(State(cache): State<Cache>, Query(params): Query<RawgQuery>) -
         return (StatusCode::NOT_FOUND, Json(ErrorResponse { error: "Game not found on Steam".into() })).into_response();
     }
 
-    let response = build_response_steam_primary(&client, &cache, &steam, appid, &key, &params.name, params.appid).await;
+    let response = build_response_steam_primary_skip_rawg(&client, &cache, &steam, appid, params.appid).await;
     cache.set_rawg(&params.name, &response);
     Json(response).into_response()
 }
 
 // Steam-only response with no RAWG lookup at all (used for Wrong game? override)
 async fn build_response_steam_primary_skip_rawg(
-    client: &reqwest::Client,
+    _client: &reqwest::Client,
     cache: &Cache,
     steam: &Value,
     appid: u64,
@@ -694,18 +691,35 @@ async fn build_response_steam_primary_skip_rawg(
         .map(|g| json!({ "name": g["description"] }))
         .collect();
     let bg = format!("https://cdn.akamai.steamstatic.com/steam/apps/{}/library_hero.jpg", appid);
+
+    // Extract trailer from Steam's movies array (first movie, mp4 max quality)
+    let movies = steam["movies"].as_array();
+    let (trailer, trailer_preview) = if let Some(m) = movies.and_then(|arr| arr.first()) {
+        let mp4 = m["mp4"]["max"].as_str()
+            .or_else(|| m["mp4"]["480"].as_str())
+            .map(|s| json!(s.replace("http://", "https://")))
+            .unwrap_or(Value::Null);
+        let thumb = m["thumbnail"].as_str()
+            .map(|s| json!(s.replace("http://", "https://")))
+            .unwrap_or(Value::Null);
+        (mp4, thumb)
+    } else {
+        (Value::Null, Value::Null)
+    };
+
     let response = json!({
         "name":             steam["name"],
         "description":      steam["detailed_description"],
         "metacritic":       steam["metacritic"]["score"],
+        "metacritic_url":   steam["metacritic"]["url"],
         "released":         steam["release_date"]["date"],
         "playtime":         Value::Null,
         "genres":           genres,
         "tags":             [],
         "background_image": bg,
         "screenshots":      screenshots,
-        "trailer":          Value::Null,
-        "trailer_preview":  Value::Null,
+        "trailer":          trailer,
+        "trailer_preview":  trailer_preview,
         "rawg_url":         format!("https://store.steampowered.com/app/{}", appid),
         "website":          steam["website"],
         "ratings_count":    Value::Null,
@@ -714,7 +728,8 @@ async fn build_response_steam_primary_skip_rawg(
     inject_yt_trailer(cache, &response, appid_opt)
 }
 
-// Build final response using Steam as primary, RAWG only for metacritic/playtime/trailer
+// Legacy RAWG-enriched builder — kept for reference, no longer called
+#[allow(dead_code)]
 async fn build_response_steam_primary(
     client: &reqwest::Client,
     cache: &Cache,
@@ -901,7 +916,7 @@ async fn get_reviews(State(cache): State<Cache>, Query(params): Query<ReviewsQue
         "https://store.steampowered.com/appreviews/{}?json=1&language=all&purchase_type=all&num_per_page=0",
         params.appid
     );
-    let client = reqwest::Client::builder().user_agent("SteamBacklogBrowser/1.0").build().unwrap_or_default();
+    let client = reqwest::Client::builder().user_agent("SteamBacklogBrowser/1.0").timeout(std::time::Duration::from_secs(8)).build().unwrap_or_default();
     match client.get(&url).send().await {
         Ok(r) => match r.json::<Value>().await {
             Ok(body) => {
@@ -1216,7 +1231,7 @@ async fn get_summary(State(cache): State<Cache>, Query(params): Query<SummaryQue
         "https://store.steampowered.com/appreviews/{}?json=1&language=english&purchase_type=all&num_per_page=25&filter=recent",
         params.appid
     );
-    let client = reqwest::Client::builder().user_agent("SteamBacklogBrowser/1.0").build().unwrap_or_default();
+    let client = reqwest::Client::builder().user_agent("SteamBacklogBrowser/1.0").timeout(std::time::Duration::from_secs(8)).build().unwrap_or_default();
     let reviews_data: Value = match client.get(&reviews_url).send().await {
         Ok(r) => r.json().await.unwrap_or(Value::Null),
         Err(e) => return (StatusCode::BAD_GATEWAY, Json(ErrorResponse { error: format!("Steam request failed: {}", e) })).into_response(),
