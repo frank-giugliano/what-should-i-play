@@ -44,6 +44,15 @@ impl Cache {
                 appid       TEXT PRIMARY KEY,
                 data        TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS hltb_nodata (
+                appid       TEXT PRIMARY KEY,
+                checked_at  INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS similar_cache (
+                appid       TEXT PRIMARY KEY,
+                data        TEXT NOT NULL,
+                cached_at   INTEGER NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS game_images (
                 appid       TEXT PRIMARY KEY,
                 header_url  TEXT NOT NULL,
@@ -183,6 +192,56 @@ impl Cache {
             let _ = conn.execute(
                 "INSERT OR REPLACE INTO hltb_cache (appid, data) VALUES (?1, ?2)",
                 params![appid, data.to_string()],
+            );
+            // Clear any no-data marker now that we have real data
+            let _ = conn.execute("DELETE FROM hltb_nodata WHERE appid = ?1", params![appid]);
+        }
+    }
+
+    fn get_similar(&self, appid: &str) -> Option<Value> {
+        let conn = self.conn.lock().ok()?;
+        let result: rusqlite::Result<(String, u64)> = conn.query_row(
+            "SELECT data, cached_at FROM similar_cache WHERE appid = ?1",
+            params![appid],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        );
+        match result {
+            Ok((data, cached_at)) if Self::now() - cached_at < 86400 => serde_json::from_str(&data).ok(),
+            _ => None,
+        }
+    }
+
+    fn set_similar(&self, appid: &str, data: &Value) {
+        if let Ok(conn) = self.conn.lock() {
+            let _ = conn.execute(
+                "INSERT OR REPLACE INTO similar_cache (appid, data, cached_at) VALUES (?1, ?2, ?3)",
+                params![appid, data.to_string(), Self::now() as i64],
+            );
+        }
+    }
+
+    // True if this appid already has HLTB data OR was recently checked with no data
+    fn hltb_is_known(&self, appid: &str) -> bool {
+        if let Ok(conn) = self.conn.lock() {
+            let has_data: bool = conn.query_row(
+                "SELECT 1 FROM hltb_cache WHERE appid = ?1", params![appid], |_| Ok(true)
+            ).unwrap_or(false);
+            if has_data { return true; }
+            // nodata valid for 30 days
+            let recent: bool = conn.query_row(
+                "SELECT checked_at FROM hltb_nodata WHERE appid = ?1", params![appid],
+                |row| row.get::<_, i64>(0)
+            ).map(|t| Self::now().saturating_sub(t as u64) < 30 * 86400).unwrap_or(false);
+            return recent;
+        }
+        false
+    }
+
+    fn mark_hltb_nodata(&self, appid: &str) {
+        if let Ok(conn) = self.conn.lock() {
+            let _ = conn.execute(
+                "INSERT OR REPLACE INTO hltb_nodata (appid, checked_at) VALUES (?1, ?2)",
+                params![appid, Self::now() as i64],
             );
         }
     }
@@ -431,6 +490,12 @@ fn port() -> u16 {
 #[derive(Deserialize)] struct SummaryQuery { appid: String, name: String }
 #[derive(Deserialize)] struct PlaytimeQuery { appid: String, name: String }
 #[derive(Deserialize)] struct SnoozeQuery    { appid: String, name: Option<String>, days: Option<i64> }
+#[derive(Deserialize)] struct HltbScanQuery  { appid: String }
+#[derive(Deserialize)] struct SimilarLibGame  { appid: String, name: String }
+#[derive(Deserialize)] struct SimilarRequest  {
+    query: String,
+    library: Vec<SimilarLibGame>,
+}
 #[derive(Deserialize)] struct SearchQuery        { q: String }
 #[derive(Deserialize)] struct ClearCacheQuery    { #[serde(rename = "type")] cache_type: String, name: Option<String> }
 #[derive(Deserialize)] struct TrailerOverrideQuery { appid: String, youtube_id: String }
@@ -1095,6 +1160,75 @@ async fn get_hltb_data(State(cache): State<Cache>, Query(params): Query<ReviewsQ
     }
 }
 
+// Return all cached HLTB playtimes keyed by appid, for client-side filtering.
+async fn get_all_hltb(State(cache): State<Cache>) -> Response {
+    if let Ok(conn) = cache.conn.lock() {
+        let mut stmt = match conn.prepare("SELECT appid, data FROM hltb_cache") {
+            Ok(s) => s,
+            Err(_) => return Json(json!({})).into_response(),
+        };
+        let mut map = serde_json::Map::new();
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        });
+        if let Ok(rows) = rows {
+            for r in rows.flatten() {
+                if let Ok(v) = serde_json::from_str::<Value>(&r.1) {
+                    // Store just the main story hours for filtering
+                    let main = v["main"].clone();
+                    map.insert(r.0, main);
+                }
+            }
+        }
+        return Json(Value::Object(map)).into_response();
+    }
+    Json(json!({})).into_response()
+}
+
+// Scan a single game's HLTB data (called in a loop by the frontend for progress).
+// Skips games already known (cached or recently marked no-data).
+async fn hltb_scan_one(State(cache): State<Cache>, Query(params): Query<HltbScanQuery>) -> Response {
+    let base = hltb_url();
+    if base.is_empty() {
+        return Json(json!({ "status": "disabled" })).into_response();
+    }
+    if cache.hltb_is_known(&params.appid) {
+        return Json(json!({ "status": "skipped" })).into_response();
+    }
+    let client = reqwest::Client::builder()
+        .user_agent("SteamBacklogBrowser/1.0")
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .unwrap_or_default();
+    let url = format!("{}/game?steam_id={}", base.trim_end_matches('/'), params.appid);
+    match client.get(&url).send().await {
+        Ok(r) if r.status().is_success() => {
+            match r.json::<Value>().await {
+                Ok(data) => {
+                    let has = data["main_story"].is_number() || data["main_extra"].is_number() || data["completionist"].is_number();
+                    if has {
+                        let response = json!({
+                            "available":      true,
+                            "main":           data["main_story"],
+                            "extras":         data["main_extra"],
+                            "completionist":  data["completionist"],
+                            "source":         data["source"],
+                            "title":          data["title"],
+                        });
+                        cache.set_hltb(&params.appid, &response);
+                        Json(json!({ "status": "cached", "main": data["main_story"] })).into_response()
+                    } else {
+                        cache.mark_hltb_nodata(&params.appid);
+                        Json(json!({ "status": "nodata" })).into_response()
+                    }
+                }
+                Err(_) => Json(json!({ "status": "error" })).into_response(),
+            }
+        }
+        _ => Json(json!({ "status": "error" })).into_response(),
+    }
+}
+
 async fn get_snoozed(State(cache): State<Cache>) -> Response {
     if let Ok(conn) = cache.conn.lock() {
         let mut stmt = match conn.prepare(
@@ -1138,6 +1272,157 @@ async fn remove_snooze(State(cache): State<Cache>, Query(params): Query<SnoozeQu
         let _ = conn.execute("DELETE FROM snoozed WHERE appid = ?1", params![params.appid]);
     }
     Json(json!({ "ok": true })).into_response()
+}
+
+// Parse a playtime string like "3-4 hours", "15 hours", "~20h" into an f64 (upper bound, rounded up)
+fn parse_hours(s: &str) -> Option<f64> {
+    let lower = s.to_lowercase();
+    // Collect all numbers in the string
+    let mut nums: Vec<f64> = Vec::new();
+    let mut cur = String::new();
+    for ch in lower.chars() {
+        if ch.is_ascii_digit() || ch == '.' {
+            cur.push(ch);
+        } else {
+            if !cur.is_empty() {
+                if let Ok(n) = cur.parse::<f64>() { nums.push(n); }
+                cur.clear();
+            }
+        }
+    }
+    if !cur.is_empty() {
+        if let Ok(n) = cur.parse::<f64>() { nums.push(n); }
+    }
+    // Take the max (upper bound of a range), round up
+    nums.into_iter().fold(None, |acc: Option<f64>, n| Some(acc.map_or(n, |a| a.max(n))))
+        .map(|n| n.ceil())
+}
+
+async fn similar_games_handler(State(cache): State<Cache>, Json(req): Json<SimilarRequest>) -> Response {
+    let anthropic = anthropic_key();
+    if anthropic.is_empty() {
+        return (StatusCode::NOT_IMPLEMENTED,
+            Json(ErrorResponse { error: "ANTHROPIC_API_KEY not configured".into() })).into_response();
+    }
+    let query = req.query.trim();
+    if query.is_empty() {
+        return (StatusCode::BAD_REQUEST,
+            Json(ErrorResponse { error: "Empty query".into() })).into_response();
+    }
+
+    // Cache keyed by the normalized query string
+    let cache_key = format!("q:{}", query.to_lowercase());
+    if let Some(cached) = cache.get_similar(&cache_key) {
+        return Json(cached).into_response();
+    }
+
+    // Library lookup: lowercased name -> appid
+    let mut lib_lookup: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut lib_names: Vec<String> = Vec::new();
+    for g in &req.library {
+        lib_lookup.insert(g.name.to_lowercase(), g.appid.clone());
+        lib_names.push(g.name.clone());
+    }
+    let library_list = lib_names.join("\n");
+
+    let client = reqwest::Client::builder()
+        .user_agent("SteamBacklogBrowser/1.0")
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .unwrap_or_default();
+
+    let mut prompt = String::new();
+    prompt.push_str("A user wants games with a similar experience to: \"");
+    prompt.push_str(query);
+    prompt.push_str("\". This reference may be from any platform or era (it might not be on Steam).\n\n");
+    prompt.push_str("Do two things:\n");
+    prompt.push_str("1. From the user's Steam library below, pick any games that offer a similar experience.\n");
+    prompt.push_str("2. Suggest up to 6 other games available on Steam (NOT necessarily in their library) that fit, favoring ones actually purchasable on Steam.\n\n");
+    prompt.push_str("For every game give a one-sentence reason. Return ONLY raw JSON (no markdown) shaped exactly:\n");
+    prompt.push_str("{\"owned\":[{\"name\":\"exact library name\",\"reason\":\"...\"}],\"steam\":[{\"name\":\"game name\",\"reason\":\"...\"}]}\n");
+    prompt.push_str("For the owned array, match names EXACTLY from the library list. If nothing in the library fits, use an empty array.\n\n");
+    prompt.push_str("LIBRARY:\n");
+    prompt.push_str(&library_list);
+
+    let result = client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", &anthropic)
+        .header("anthropic-version", "2023-06-01")
+        .header(header::CONTENT_TYPE, "application/json")
+        .json(&json!({
+            "model": "claude-haiku-4-5",
+            "max_tokens": 1500,
+            "messages": [{ "role": "user", "content": prompt }]
+        }))
+        .send()
+        .await;
+
+    match result {
+        Ok(r) if r.status().is_success() => {
+            let data: Value = r.json().await.unwrap_or(Value::Null);
+            let text = data["content"].as_array()
+                .map(|arr| arr.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join(""))
+                .unwrap_or_default();
+            // Extract JSON object
+            let parsed = text.find('{').and_then(|start| {
+                text.rfind('}').map(|end| &text[start..=end])
+            }).and_then(|s| serde_json::from_str::<Value>(s).ok());
+
+            let mut owned: Vec<Value> = Vec::new();
+            let mut steam: Vec<Value> = Vec::new();
+            if let Some(obj) = parsed.as_ref() {
+                // Owned: validate against library
+                if let Some(arr) = obj["owned"].as_array() {
+                    for item in arr {
+                        if let Some(name) = item["name"].as_str() {
+                            if let Some(appid) = lib_lookup.get(&name.to_lowercase()) {
+                                owned.push(json!({
+                                    "appid": appid,
+                                    "name": name,
+                                    "reason": item["reason"].as_str().unwrap_or(""),
+                                }));
+                            }
+                        }
+                    }
+                }
+                // Steam suggestions: pass through, exclude anything already owned
+                if let Some(arr) = obj["steam"].as_array() {
+                    for item in arr {
+                        if let Some(name) = item["name"].as_str() {
+                            if lib_lookup.contains_key(&name.to_lowercase()) { continue; }
+                            steam.push(json!({
+                                "name": name,
+                                "reason": item["reason"].as_str().unwrap_or(""),
+                                "store_url": format!("https://store.steampowered.com/search/?term={}",
+                                    urlencoding_encode(name)),
+                            }));
+                        }
+                    }
+                }
+            }
+
+            let response = json!({ "owned": owned, "steam": steam });
+            cache.set_similar(&cache_key, &response);
+            Json(response).into_response()
+        }
+        Ok(r) => (StatusCode::BAD_GATEWAY,
+            Json(ErrorResponse { error: format!("Anthropic error: {}", r.status()) })).into_response(),
+        Err(e) => (StatusCode::BAD_GATEWAY,
+            Json(ErrorResponse { error: format!("Request failed: {}", e) })).into_response(),
+    }
+}
+
+// Minimal URL-encoder for query terms
+fn urlencoding_encode(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            b' ' => out.push_str("%20"),
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
 }
 
 async fn get_playtime(State(cache): State<Cache>, Query(params): Query<PlaytimeQuery>) -> Response {
@@ -1196,6 +1481,18 @@ async fn get_playtime(State(cache): State<Cache>, Query(params): Query<PlaytimeQ
                             let has_data = main_ok || extras_ok || comp_ok;
                             if has_data {
                                 cache.set_playtime(&params.appid, &p);
+                                // Also populate hltb_cache so length filters pick it up
+                                if let Some(main_hours) = p["main"].as_str().and_then(parse_hours) {
+                                    let hltb_shaped = json!({
+                                        "available":     true,
+                                        "main":          main_hours,
+                                        "extras":        Value::Null,
+                                        "completionist": Value::Null,
+                                        "source":        "AI estimate",
+                                        "title":         p["title"].clone(),
+                                    });
+                                    cache.set_hltb(&params.appid, &hltb_shaped);
+                                }
                                 Json(p).into_response()
                             } else {
                                 (StatusCode::NOT_FOUND,
@@ -1337,8 +1634,11 @@ async fn main() {
         .route("/api/trailer_override",    get(get_trailer_override_handler).post(set_trailer_override))
         .route("/api/summary",             get(get_summary))
         .route("/api/playtime",            get(get_playtime))
+        .route("/api/similar",             post(similar_games_handler))
         .route("/api/snooze",              get(get_snoozed).post(set_snooze).delete(remove_snooze))
         .route("/api/hltb",                get(get_hltb_data))
+        .route("/api/hltb/scan",           get(hltb_scan_one))
+        .route("/api/hltb/all",            get(get_all_hltb))
         .route("/api/game_image",          get(get_game_image_handler))
         .route("/api/config",              get(get_config))
         .route("/img_cache/:filename",     get(serve_image))

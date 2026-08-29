@@ -103,6 +103,18 @@
   .action-btn-sm { flex: 1; padding: 10px; border-radius: var(--r); font-size: 12px; border: 1px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; font-family: var(--font); display: flex; align-items: center; justify-content: center; gap: 5px; text-decoration: none; }
 
   /* Bell modal */
+  .filter-modal { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg2); border-top: 1px solid var(--border2); border-radius: var(--rl) var(--rl) 0 0; padding: 1.5rem 1.25rem 2.5rem; z-index: 500; box-shadow: 0 -8px 32px rgba(0,0,0,.5); transform: translateY(100%); transition: transform .25s cubic-bezier(.32,.72,0,1); }
+  .filter-modal.open { transform: translateY(0); }
+  .filter-modal h3 { font-size: 16px; font-weight: 600; color: var(--text); margin: 0 0 4px; }
+  .filter-modal h5 { font-size: 12px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 8px; }
+  .filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-opt { flex: 1; min-width: 60px; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--r); padding: 10px 8px; font-size: 13px; color: var(--text2); cursor: pointer; font-family: var(--font); text-align: center; white-space: nowrap; }
+  .filter-opt.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .filter-hint { font-size: 11px; color: var(--text3); margin-top: 8px; }
+  .filter-actions { display: flex; gap: 8px; margin-top: 20px; }
+  .filter-apply { flex: 1; background: var(--accent); border: none; border-radius: var(--r); padding: 13px; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer; font-family: var(--font); }
+  .filter-reset { background: transparent; border: 1px solid var(--border2); border-radius: var(--r); padding: 13px 18px; font-size: 15px; color: var(--text2); cursor: pointer; font-family: var(--font); }
+
   .bell-modal { position: fixed; top: 52px; right: 1rem; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--rl); padding: 1.25rem; width: calc(100vw - 2rem); max-width: 340px; z-index: 500; box-shadow: 0 8px 32px rgba(0,0,0,.6); opacity: 0; pointer-events: none; transition: opacity .15s; max-height: 70vh; overflow-y: auto; }
   .bell-modal.open { opacity: 1; pointer-events: all; }
   .bell-modal h4 { font-size: 13px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
@@ -141,6 +153,8 @@
   .search-overlay.open { opacity: 1; pointer-events: all; }
   .search-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
   .search-back { background: transparent; border: none; color: var(--text2); font-size: 22px; cursor: pointer; padding: 4px; display: flex; align-items: center; }
+  .search-mode-tab { flex: 1; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--r); padding: 8px; font-size: 13px; color: var(--text2); font-family: var(--font); cursor: pointer; }
+  .search-mode-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .search-input { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; font-size: 16px; color: var(--text); outline: none; font-family: var(--font); }
   .search-input:focus { border-color: var(--accent2); }
   .search-results { flex: 1; overflow-y: auto; padding: 8px 0; }
@@ -214,11 +228,10 @@
   <div class="topbar">
     <div class="topbar-brand"><i class="ti ti-device-gamepad-2" style="font-size:16px"></i> What Should I Play?</div>
     <div class="topbar-right">
-      <div class="pool-toggle">
-        <button class="pool-btn active" id="pool-unplayed" onclick="setPool('unplayed')">New</button>
-        <button class="pool-btn" id="pool-under2h" onclick="setPool('under2h')">&lt;2h</button>
-        <button class="pool-btn" id="pool-all" onclick="setPool('all')">All</button>
-      </div>
+      <button class="icon-btn" id="btn-filter" onclick="openFilter()" style="position:relative">
+        <i class="ti ti-adjustments-horizontal" style="font-size:14px"></i>
+        <span id="filter-dot" style="display:none;position:absolute;top:-2px;right:-2px;width:8px;height:8px;background:var(--accent2);border-radius:50%"></span>
+      </button>
       <button class="icon-btn" id="btn-bell" onclick="openBell()" style="position:relative">
         <i class="ti ti-bell" style="font-size:14px"></i>
         <span id="bell-badge" style="position:absolute;top:-2px;right:-2px;background:var(--red);color:#fff;border-radius:50%;width:14px;height:14px;font-size:9px;display:none;align-items:center;justify-content:center;font-weight:600"></span>
@@ -298,11 +311,43 @@
     </button>
     <div class="cache-status" id="cache-status"><i class="ti ti-check" style="font-size:12px"></i> Done</div>
   </div>
+  <div class="settings-section" style="padding-top:.75rem;border-top:1px solid var(--border)">
+    <h5>Playtime data</h5>
+    <button class="cache-btn" id="hltb-scan-btn" onclick="scanHltb()">
+      <div class="cache-btn-label"><span>Scan library for playtimes</span><span class="cache-btn-desc">Fetches HowLongToBeat data for all games</span></div>
+      <i class="ti ti-clock-play" style="font-size:15px;color:var(--text3);flex-shrink:0"></i>
+    </button>
+    <div class="cache-status" id="hltb-scan-status" style="display:none"></div>
+  </div>
   <div class="settings-section" style="margin-bottom:0;padding-top:.75rem;border-top:1px solid var(--border)">
     <button class="cache-btn" onclick="resetApp();closeSettings()">
       <div class="cache-btn-label"><span>Switch account</span><span class="cache-btn-desc">Return to setup screen</span></div>
       <i class="ti ti-logout" style="font-size:15px;color:var(--text3);flex-shrink:0"></i>
     </button>
+  </div>
+</div>
+
+<!-- Filter modal -->
+<div class="filter-modal" id="filter-modal">
+  <h3>Filter games</h3>
+  <h5>Library status</h5>
+  <div class="filter-row" id="filter-status">
+    <button class="filter-opt" data-val="unplayed" onclick="pickFilter('status','unplayed')">New</button>
+    <button class="filter-opt" data-val="under2h" onclick="pickFilter('status','under2h')">&lt;2h</button>
+    <button class="filter-opt" data-val="all" onclick="pickFilter('status','all')">All</button>
+  </div>
+  <h5>Time to beat</h5>
+  <div class="filter-row" id="filter-length">
+    <button class="filter-opt" data-val="any" onclick="pickFilter('length','any')">Any</button>
+    <button class="filter-opt" data-val="short" onclick="pickFilter('length','short')">&lt;10h</button>
+    <button class="filter-opt" data-val="medium" onclick="pickFilter('length','medium')">10–30h</button>
+    <button class="filter-opt" data-val="long" onclick="pickFilter('length','long')">30h+</button>
+    <button class="filter-opt" data-val="unknown" onclick="pickFilter('length','unknown')">Unknown</button>
+  </div>
+  <div class="filter-hint" id="filter-hint"></div>
+  <div class="filter-actions">
+    <button class="filter-reset" onclick="resetFilter()">Reset</button>
+    <button class="filter-apply" onclick="applyFilter()">Apply</button>
   </div>
 </div>
 
@@ -341,6 +386,16 @@
     <button class="search-back" onclick="closeSearch()"><i class="ti ti-arrow-left"></i></button>
     <input class="search-input" id="search-input" type="text" placeholder="Search any Steam game…"
            inputmode="search" oninput="onSearchInput()" onkeydown="if(event.key==='Enter')doSearch()" />
+  </div>
+  <div style="display:flex;gap:8px;padding:0 12px 8px">
+    <button class="search-mode-tab active" id="tab-search" onclick="setSearchMode('search')">Search</button>
+    <button class="search-mode-tab" id="tab-discover" onclick="setSearchMode('discover')">Find similar</button>
+  </div>
+  <div id="discover-wrap" style="display:none;padding:0 12px 8px">
+    <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Any game, any platform or era — get picks from your library and Steam.</p>
+    <input class="search-input" id="discover-input" type="text" placeholder="e.g. Jet Force Gemini…"
+           inputmode="search" onkeydown="if(event.key==='Enter')doDiscover()" style="width:100%" />
+    <button onclick="doDiscover()" style="margin-top:8px;width:100%;padding:12px;border:none;background:var(--accent);color:#fff;border-radius:var(--r);font-size:15px;font-weight:600;font-family:var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-sparkles"></i> Find similar</button>
   </div>
   <div class="search-results" id="search-results-area">
     <div class="search-empty">Type to search</div>
@@ -394,6 +449,8 @@ let unplayed = [];
 let candidates = [];
 let activeIdx = 0;
 let poolMode = 'unplayed';
+let lengthFilter = 'any';
+let hltbData = {};
 let currentRawg = null;
 let reviewsSteamUrl = '';
 let heroImages = [];
@@ -441,6 +498,7 @@ async function startApp() {
     if (!data.response?.games) throw new Error('No games returned. Is your Steam profile public?');
     allGames = data.response.games;
     await loadSnoozed();
+    loadHltbData();
     unplayed = allGames.filter(g => !g.playtime_forever);
     document.getElementById('setup-screen').style.display = 'none';
     document.getElementById('app').classList.add('visible');
@@ -469,6 +527,17 @@ function pickCandidates() {
   else if (poolMode === 'under2h') pool = allGames.filter(g => (g.playtime_forever || 0) < 120);
   else                             pool = [...allGames];
   pool = pool.filter(g => !snoozedAppids.has(String(g.appid)));
+  if (lengthFilter !== 'any') {
+    pool = pool.filter(g => {
+      const h = hltbData[g.appid];
+      if (lengthFilter === 'unknown') return h == null;
+      if (h == null) return false;
+      if (lengthFilter === 'short')  return h < 10;
+      if (lengthFilter === 'medium') return h >= 10 && h <= 30;
+      if (lengthFilter === 'long')   return h > 30;
+      return true;
+    });
+  }
   const maxHistory = Math.max(20, Math.floor(pool.length * 0.33));
   const fresh = pool.filter(g => !recentlyShown.has(g.appid));
   const source = fresh.length >= CANDIDATE_COUNT ? fresh : pool;
@@ -482,12 +551,97 @@ function pickCandidates() {
   return picks;
 }
 
-function setPool(mode) {
-  poolMode = mode;
-  ['unplayed','under2h','all'].forEach(m => {
-    document.getElementById(`pool-${m}`).classList.toggle('active', m === mode);
-  });
+let pendingStatus = 'unplayed';
+let pendingLength = 'any';
+
+function openFilter() {
+  pendingStatus = poolMode;
+  pendingLength = lengthFilter;
+  syncFilterUI();
+  const scanned = Object.keys(hltbData).length;
+  document.getElementById('filter-hint').textContent = scanned === 0
+    ? 'Tip: run "Scan library for playtimes" in Settings to enable time filters.'
+    : '';
+  document.getElementById('filter-modal').classList.add('open');
+}
+
+function closeFilter() {
+  document.getElementById('filter-modal').classList.remove('open');
+}
+
+function pickFilter(group, val) {
+  if (group === 'status') pendingStatus = val;
+  else pendingLength = val;
+  syncFilterUI();
+}
+
+function syncFilterUI() {
+  document.querySelectorAll('#filter-status .filter-opt').forEach(b =>
+    b.classList.toggle('active', b.dataset.val === pendingStatus));
+  document.querySelectorAll('#filter-length .filter-opt').forEach(b =>
+    b.classList.toggle('active', b.dataset.val === pendingLength));
+}
+
+async function applyFilter() {
+  poolMode = pendingStatus;
+  lengthFilter = pendingLength;
+  if (lengthFilter !== 'any' && Object.keys(hltbData).length === 0) {
+    await loadHltbData();
+  }
+  updateFilterDot();
+  closeFilter();
   reroll();
+}
+
+function resetFilter() {
+  pendingStatus = 'unplayed';
+  pendingLength = 'any';
+  syncFilterUI();
+}
+
+function updateFilterDot() {
+  const active = poolMode !== 'unplayed' || lengthFilter !== 'any';
+  document.getElementById('filter-dot').style.display = active ? 'block' : 'none';
+}
+
+async function loadHltbData() {
+  try {
+    const r = await fetch(`${proxy}/api/hltb/all`);
+    hltbData = await r.json();
+  } catch(e) { hltbData = {}; }
+}
+
+let scanCancel = false;
+async function scanHltb() {
+  const btn = document.getElementById('hltb-scan-btn');
+  const status = document.getElementById('hltb-scan-status');
+  if (btn.dataset.running === '1') { scanCancel = true; return; }
+  const games = allGames || [];
+  if (!games.length) return;
+  btn.dataset.running = '1';
+  scanCancel = false;
+  status.style.display = 'block';
+  let done = 0, cached = 0, skipped = 0, nodata = 0;
+  for (const g of games) {
+    if (scanCancel) break;
+    try {
+      const r = await fetch(`${proxy}/api/hltb/scan?appid=${g.appid}`);
+      const d = await r.json();
+      if (d.status === 'cached') cached++;
+      else if (d.status === 'skipped') skipped++;
+      else if (d.status === 'nodata') nodata++;
+      else if (d.status === 'disabled') { status.innerHTML = 'HLTB not configured'; btn.dataset.running=''; return; }
+    } catch(e) {}
+    done++;
+    status.innerHTML = `Scanning… ${done}/${games.length} · ${cached} found, ${skipped} cached, ${nodata} no data`;
+    await new Promise(res => setTimeout(res, 150));
+  }
+  status.innerHTML = scanCancel
+    ? `Stopped · ${cached} new, ${skipped} already had data`
+    : `✓ Done · ${cached} new, ${skipped} already cached, ${nodata} no data`;
+  btn.dataset.running = '';
+  scanCancel = false;
+  await loadHltbData();
 }
 
 async function reroll() {
@@ -495,9 +649,8 @@ async function reroll() {
   activeIdx = 0;
   Object.keys(prefetchCache).forEach(k => delete prefetchCache[k]);
   renderCandidates();
-  await prefetchCandidate(candidates[0]);
+  candidates.forEach(g => prefetchCandidate(g));
   await selectCandidate(0);
-  candidates.slice(1).forEach(g => prefetchCandidate(g));
 }
 
 function renderCandidates() {
@@ -851,7 +1004,8 @@ let searchTimeout = null;
 
 function openSearch() {
   document.getElementById('search-input').value = '';
-  document.getElementById('search-results-area').innerHTML = '<div class="search-empty">Type to search</div>';
+  document.getElementById('discover-input').value = '';
+  setSearchMode('search');
   document.getElementById('search-overlay').classList.add('open');
   setTimeout(() => document.getElementById('search-input').focus(), 100);
 }
@@ -902,6 +1056,66 @@ async function doSearch() {
   }
 }
 
+function setSearchMode(mode) {
+  const isSearch = mode === 'search';
+  document.getElementById('tab-search').classList.toggle('active', isSearch);
+  document.getElementById('tab-discover').classList.toggle('active', !isSearch);
+  document.getElementById('search-input').style.display = isSearch ? '' : 'none';
+  document.getElementById('discover-wrap').style.display = isSearch ? 'none' : 'block';
+  document.getElementById('search-results-area').innerHTML =
+    isSearch ? '<div class="search-empty">Type to search</div>' : '<div class="search-empty">Enter a game above</div>';
+  if (!isSearch) setTimeout(() => document.getElementById('discover-input').focus(), 100);
+}
+
+async function doDiscover() {
+  const q = document.getElementById('discover-input').value.trim();
+  if (!q) return;
+  const out = document.getElementById('search-results-area');
+  out.innerHTML = '<div class="search-empty"><i class="ti ti-loader spin"></i> Thinking about games like that…</div>';
+  const library = allGames.map(g => ({ appid: String(g.appid), name: g.name }));
+  try {
+    const r = await fetch(`${proxy}/api/similar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q, library })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed');
+    const owned = data.owned || [];
+    const steam = data.steam || [];
+    if (!owned.length && !steam.length) {
+      out.innerHTML = '<div class="search-empty">No similar games found.</div>';
+      return;
+    }
+    let html = '';
+    if (owned.length) {
+      html += '<div style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;padding:12px 4px 6px">In your library</div>';
+      html += owned.map(g => `
+        <div class="search-result" onclick="loadSnoozedGame(${g.appid}, '${esc(g.name).replace(/'/g, "\\'")}')">
+          <img class="search-result-thumb" src="https://cdn.akamai.steamstatic.com/steam/apps/${g.appid}/header.jpg" onerror="fetchAndFixImage(this, ${g.appid})">
+          <div class="search-result-info">
+            <div class="search-result-name">${esc(g.name)}</div>
+            <div class="search-result-meta" style="white-space:normal">${esc(g.reason || '')}</div>
+          </div>
+        </div>`).join('');
+    }
+    if (steam.length) {
+      html += '<div style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;padding:12px 4px 6px">On Steam</div>';
+      html += steam.map(g => `
+        <a class="search-result" href="${g.store_url}" target="_blank" style="text-decoration:none">
+          <div class="search-result-info">
+            <div class="search-result-name">${esc(g.name)}</div>
+            <div class="search-result-meta" style="white-space:normal">${esc(g.reason || '')}</div>
+          </div>
+          <i class="ti ti-external-link" style="color:var(--text3);font-size:15px;flex-shrink:0;align-self:center;padding-right:8px"></i>
+        </a>`).join('');
+    }
+    out.innerHTML = html;
+  } catch(e) {
+    out.innerHTML = `<div class="search-empty" style="color:var(--red)">${esc(e.message)}</div>`;
+  }
+}
+
 async function loadSearchResult(g) {
   closeSearch();
   setLoading(`Looking up ${cleanGameName(g.name)}…`);
@@ -937,6 +1151,13 @@ function closeSettings() {
   document.getElementById('settings-modal').classList.remove('open');
 }
 
+document.addEventListener('click', e => {
+  const fm = document.getElementById('filter-modal');
+  const fbtn = e.target.closest('#btn-filter');
+  if (!fbtn && fm && fm.classList.contains('open') && !fm.contains(e.target)) {
+    fm.classList.remove('open');
+  }
+}, true);
 document.addEventListener('click', e => {
   const modal = document.getElementById('settings-modal');
   const btn = e.target.closest('[onclick="openSettings()"]');
