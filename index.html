@@ -306,7 +306,7 @@
           <button onclick="steamOverride()" class="btn-links" style="border-color:rgba(255,255,255,0.06);color:var(--text3);font-size:16px"><i class="ti ti-alert-triangle" aria-hidden="true" style="font-size:13px"></i> Wrong game?</button>
           </div>
           <div class="hero-reviews hidden" id="reviews-section">
-          <span class="reviews-label">Steam reviews</span>
+          <span class="reviews-label" id="reviews-label">Steam reviews</span>
           <span class="review-score-label hidden" id="review-score-label"></span>
           <span class="review-score-count hidden" id="review-score-count"></span>
           <button id="reviews-link" class="reviews-link hidden" onclick="openReviewsModal()" style="background:transparent;border:none;cursor:pointer;padding:0;font-family:var(--font);color:var(--accent);font-size:12px;display:inline-flex;align-items:center;gap:4px">
@@ -522,6 +522,7 @@ let unplayed = [];
 let candidates = [];
 let activeIdx = 0;
 let currentRawg = null;
+let reviewsSteamUrl = '';
 
 function proxyBase() { return proxy.replace(/\/$/, ''); }
 
@@ -896,25 +897,46 @@ function renderReviews(data, appid) {
   const scoreCount = document.getElementById('review-score-count');
   const link       = document.getElementById('reviews-link');
 
-  if (!data || data.error) { section.classList.add('hidden'); return; }
+  // Steam answered and confirmed zero reviews (pre-orders, brand-new games):
+  // nothing to read or summarize, so hide the whole reviews area.
+  if (data && !data.error && Number(data.total_reviews) === 0) {
+    section.classList.add('hidden');
+    link.classList.add('hidden');
+    return;
+  }
 
-  const total    = data.total_reviews || 0;
-  const positive = data.total_positive || 0;
-  const pct      = total > 0 ? Math.round(positive / total * 100) : 0;
-  const desc     = data.review_score_desc || 'No reviews';
+  // Otherwise keep the Reviews button available, even if the score didn't
+  // load (e.g. Steam throttled us) — the reviews may well exist.
+  reviewsSteamUrl = (data && data.reviews_url) ||
+    `https://store.steampowered.com/app/${appid}/#app_reviews_hash`;
+  link.href = reviewsSteamUrl;
+  section.classList.remove('hidden');
+  link.classList.remove('hidden');
+
+  const total = (data && Number(data.total_reviews)) || 0;
+  const desc  = data && data.review_score_desc;
+
+  const staticLabel = document.getElementById('reviews-label');
+
+  // Only show the inline score when Steam actually returned review data.
+  if (!data || data.error || !desc || total === 0) {
+    scoreLabel.classList.add('hidden');
+    scoreCount.classList.add('hidden');
+    if (staticLabel) staticLabel.classList.add('hidden');
+    return;
+  }
+  if (staticLabel) staticLabel.classList.remove('hidden');
+
+  const positive = Number(data.total_positive) || 0;
+  const pct      = Math.round(positive / total * 100);
   const descClass = desc.toLowerCase().includes('positive') ? 'score-great'
                   : desc.toLowerCase().includes('mixed') ? 'score-mixed' : 'score-bad';
 
   scoreLabel.textContent = desc;
   scoreLabel.className = `review-score-label ${descClass}`;
   scoreCount.textContent = `· ${pct}% of ${total.toLocaleString()}`;
-  link.href = data.reviews_url || `https://store.steampowered.com/app/${appid}/#app_reviews_hash`;
-
-  section.classList.remove('hidden');
   scoreLabel.classList.remove('hidden');
   scoreCount.classList.remove('hidden');
-  link.classList.remove('hidden');
-
 }
 
 function buildHeroImages(d, game) {
@@ -1041,7 +1063,6 @@ if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
   window.location.replace('/mobile');
 }
 
-let reviewsSteamUrl = '';
 let summaryAppid = '';
 let summaryName = '';
 

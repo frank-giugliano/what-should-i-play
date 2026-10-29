@@ -970,6 +970,31 @@ fn futures_executor_block_on<F: std::future::Future>(f: F) -> F::Output {
     tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(f))
 }
 
+// Steam retired store.steampowered.com/appreviews on 2026-10-22 (it now redirects to the
+// store front page). Its replacement is IUserReviewsService/GetAppReviews on the Web API,
+// which takes its options as a single URL-encoded `input_json` value and wraps the
+// result in a top-level "response" object. No API key needed (anonymous rate limit).
+async fn fetch_app_reviews(client: &reqwest::Client, input: &Value) -> Result<Value, String> {
+    let url = format!(
+        "https://api.steampowered.com/IUserReviewsService/GetAppReviews/v1/?input_json={}",
+        urlencoding::encode(&input.to_string())
+    );
+    let r = client.get(&url).send().await.map_err(|e| format!("Steam reviews failed: {}", e))?;
+    let status = r.status();
+    let text = r.text().await.unwrap_or_default();
+    if !status.is_success() {
+        let snippet: String = text.chars().take(200).collect();
+        println!("Steam GetAppReviews HTTP {}: {}", status, snippet);
+        return Err(format!("Steam reviews HTTP {}", status));
+    }
+    let body: Value = serde_json::from_str(&text).map_err(|_| {
+        let snippet: String = text.chars().take(200).collect();
+        println!("Steam GetAppReviews non-JSON: {}", snippet);
+        "Bad Steam review response".to_string()
+    })?;
+    Ok(body["response"].clone())
+}
+
 async fn get_reviews(State(cache): State<Cache>, Query(params): Query<ReviewsQuery>) -> Response {
     if params.appid.is_empty() || !params.appid.chars().all(|c| c.is_ascii_digit()) {
         return (StatusCode::BAD_REQUEST, Json(ErrorResponse { error: "Invalid appid".into() })).into_response();
@@ -977,28 +1002,40 @@ async fn get_reviews(State(cache): State<Cache>, Query(params): Query<ReviewsQue
     if let Some(cached) = cache.get_reviews(&params.appid) {
         return Json(cached).into_response();
     }
-    let url = format!(
-        "https://store.steampowered.com/appreviews/{}?json=1&language=all&purchase_type=all&num_per_page=0",
-        params.appid
-    );
+    let appid: u64 = params.appid.parse().unwrap_or(0);
     let client = reqwest::Client::builder().user_agent("SteamBacklogBrowser/1.0").timeout(std::time::Duration::from_secs(8)).build().unwrap_or_default();
-    match client.get(&url).send().await {
-        Ok(r) => match r.json::<Value>().await {
-            Ok(body) => {
-                let summary = &body["query_summary"];
-                let response = json!({
-                    "total_positive":    summary["total_positive"],
-                    "total_negative":    summary["total_negative"],
-                    "total_reviews":     summary["total_reviews"],
-                    "review_score_desc": summary["review_score_desc"],
-                    "reviews_url":       format!("https://store.steampowered.com/app/{}/#app_reviews_hash", params.appid),
-                });
+
+    // Totals only come back on the first page with review_type = All (0).
+    // purchase_type 1 = all purchases (matches the old purchase_type=all);
+    // filter 0 + day_range 0 = no date limit.
+    let input = json!({
+        "appid": appid,
+        "languages": ["all"],
+        "purchase_type": 1,
+        "review_type": 0,
+        "filter": 0,
+        "day_range": 0,
+        "num_per_page": 1,
+        "cursor": "*"
+    });
+
+    match fetch_app_reviews(&client, &input).await {
+        Ok(resp) => {
+            let summary = &resp["query_summary"];
+            let response = json!({
+                "total_positive":    summary["total_positive"],
+                "total_negative":    summary["total_negative"],
+                "total_reviews":     summary["total_reviews"],
+                "review_score_desc": summary["review_score_desc"],
+                "reviews_url":       format!("https://store.steampowered.com/app/{}/#app_reviews_hash", params.appid),
+            });
+            // Only cache real data, so a throttled/empty answer doesn't get stuck.
+            if summary["total_reviews"].is_number() {
                 cache.set_reviews(&params.appid, &response);
-                Json(response).into_response()
             }
-            Err(_) => (StatusCode::BAD_GATEWAY, Json(ErrorResponse { error: "Bad Steam review response".into() })).into_response(),
-        },
-        Err(e) => (StatusCode::BAD_GATEWAY, Json(ErrorResponse { error: format!("Steam reviews failed: {}", e) })).into_response(),
+            Json(response).into_response()
+        }
+        Err(e) => (StatusCode::BAD_GATEWAY, Json(ErrorResponse { error: e })).into_response(),
     }
 }
 
@@ -1524,14 +1561,20 @@ async fn get_summary(State(cache): State<Cache>, Query(params): Query<SummaryQue
         return Json(json!({ "summary": cached })).into_response();
     }
 
-    let reviews_url = format!(
-        "https://store.steampowered.com/appreviews/{}?json=1&language=english&purchase_type=all&num_per_page=25&filter=recent",
-        params.appid
-    );
     let client = reqwest::Client::builder().user_agent("SteamBacklogBrowser/1.0").timeout(std::time::Duration::from_secs(8)).build().unwrap_or_default();
-    let reviews_data: Value = match client.get(&reviews_url).send().await {
-        Ok(r) => r.json().await.unwrap_or(Value::Null),
-        Err(e) => return (StatusCode::BAD_GATEWAY, Json(ErrorResponse { error: format!("Steam request failed: {}", e) })).into_response(),
+    let appid: u64 = params.appid.parse().unwrap_or(0);
+    // filter 1 = Recent; empty/English language; all purchase types
+    let input = json!({
+        "appid": appid,
+        "languages": ["english"],
+        "purchase_type": 1,
+        "filter": 1,
+        "num_per_page": 25,
+        "cursor": "*"
+    });
+    let reviews_data = match fetch_app_reviews(&client, &input).await {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::BAD_GATEWAY, Json(ErrorResponse { error: e })).into_response(),
     };
 
     let reviews = match reviews_data["reviews"].as_array() {

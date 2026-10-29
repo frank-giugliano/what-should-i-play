@@ -267,7 +267,7 @@
     <div class="info-meta" id="info-meta"></div>
     <div class="info-desc" id="info-desc"></div>
     <div class="reviews-line hidden" id="reviews-line">
-      <span>Steam reviews</span>
+      <span id="reviews-label">Steam reviews</span>
       <span class="review-score-label" id="review-score-label"></span>
       <span id="review-score-count" style="color:var(--text3)"></span>
       <button id="reviews-link" class="reviews-link hidden" onclick="openReviewsModal()" style="background:transparent;border:none;cursor:pointer;padding:0;font-family:var(--font);color:var(--accent);font-size:12px;display:inline-flex;align-items:center;gap:3px"><i class="ti ti-messages" style="font-size:11px"></i> Reviews</button>
@@ -897,21 +897,46 @@ function renderFallback(game) {
 }
 
 function renderReviews(data, appid) {
-  const line = document.getElementById('reviews-line');
-  if (!data || data.error) { line.classList.add('hidden'); return; }
-  const total    = data.total_reviews || 0;
-  const positive = data.total_positive || 0;
-  const pct      = total > 0 ? Math.round(positive / total * 100) : 0;
-  const desc     = data.review_score_desc || 'No reviews';
-  const descClass = desc.toLowerCase().includes('positive') ? 'score-great'
-                  : desc.toLowerCase().includes('mixed') ? 'score-mixed' : 'score-bad';
-  const label = document.getElementById('review-score-label');
-  label.textContent = desc;
-  label.className = `review-score-label ${descClass}`;
-  document.getElementById('review-score-count').textContent = `· ${pct}% of ${total.toLocaleString()}`;
-  reviewsSteamUrl = data.reviews_url || `https://store.steampowered.com/app/${appid}/#app_reviews_hash`;
+  const line       = document.getElementById('reviews-line');
+  const label      = document.getElementById('review-score-label');
+  const count      = document.getElementById('review-score-count');
+  const staticLabel = document.getElementById('reviews-label');
+
+  // Steam answered and confirmed zero reviews (pre-orders, brand-new games):
+  // nothing to read or summarize, so hide the whole reviews line.
+  if (data && !data.error && Number(data.total_reviews) === 0) {
+    line.classList.add('hidden');
+    document.getElementById('reviews-link').classList.add('hidden');
+    return;
+  }
+
+  // Otherwise keep the Reviews button available, even if the score didn't
+  // load (e.g. Steam throttled us) — the reviews may well exist.
+  reviewsSteamUrl = (data && data.reviews_url) ||
+    `https://store.steampowered.com/app/${appid}/#app_reviews_hash`;
   line.classList.remove('hidden');
   document.getElementById('reviews-link').classList.remove('hidden');
+
+  const total = (data && Number(data.total_reviews)) || 0;
+  const desc  = data && data.review_score_desc;
+
+  // Only show the inline score when Steam actually returned review data.
+  if (!data || data.error || !desc || total === 0) {
+    label.classList.add('hidden');
+    count.textContent = '';
+    if (staticLabel) staticLabel.classList.add('hidden');
+    return;
+  }
+  if (staticLabel) staticLabel.classList.remove('hidden');
+
+  const positive = Number(data.total_positive) || 0;
+  const pct      = Math.round(positive / total * 100);
+  const descClass = desc.toLowerCase().includes('positive') ? 'score-great'
+                  : desc.toLowerCase().includes('mixed') ? 'score-mixed' : 'score-bad';
+  label.textContent = desc;
+  label.className = `review-score-label ${descClass}`;
+  label.classList.remove('hidden');
+  count.textContent = `· ${pct}% of ${total.toLocaleString()}`;
 }
 
 function launchGame() {
